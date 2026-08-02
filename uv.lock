@@ -1,0 +1,12 @@
+version = 1
+revision = 3
+requires-python = ">=3.13"
+
+[options]
+exclude-newer = "2026-07-22T17:52:49.326378Z"
+exclude-newer-span = "P10D"
+
+[[package]]
+name = "oncafe"
+version = "0.1.0"
+source = { editable = "." }

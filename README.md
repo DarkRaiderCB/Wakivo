@@ -62,8 +62,12 @@ there is nothing to clean up and nothing to restore.
 
 ## Status
 
-v0 supports macOS and Windows. Linux support is planned via the systemd-logind
-inhibitor (`org.freedesktop.login1.Manager.Inhibit`), tested against Debian.
+v0 supports macOS and Windows, both verified: the hold is visible in
+`pmset -g assertions` and `powercfg /requests` respectively, and is reclaimed
+by the OS even on `SIGKILL` / `taskkill /F`.
+
+Linux support is planned via the systemd-logind inhibitor
+(`org.freedesktop.login1.Manager.Inhibit`), tested against Debian.
 
 ## Licence
 

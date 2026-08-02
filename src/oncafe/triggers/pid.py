@@ -9,8 +9,12 @@ from .base import TriggerError
 
 _POLL_SECONDS = 1.0
 
+_SYNCHRONIZE = 0x00100000
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-_STILL_ACTIVE = 259
+_WAIT_TIMEOUT = 0x00000102
+_ERROR_ACCESS_DENIED = 5
+
+_kernel32 = None
 
 
 def _is_alive_posix(pid: int) -> bool:
@@ -24,20 +28,42 @@ def _is_alive_posix(pid: int) -> bool:
     return True
 
 
+def _load_kernel32():
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    # A HANDLE is pointer-sized. Without these declarations ctypes assumes a
+    # C int and truncates it on 64-bit Windows, so every later call on the
+    # handle fails and a live process looks dead.
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel32.WaitForSingleObject.restype = wintypes.DWORD
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    return kernel32
+
+
 def _is_alive_windows(pid: int) -> bool:
     # NOTE: os.kill(pid, 0) on Windows calls TerminateProcess -- it would kill
     # the very process we are trying to wait on. Query the handle instead.
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    global _kernel32
+    if _kernel32 is None:
+        _kernel32 = _load_kernel32()
+
+    access = _SYNCHRONIZE | _PROCESS_QUERY_LIMITED_INFORMATION
+    handle = _kernel32.OpenProcess(access, False, pid)
     if not handle:
-        return False
+        # Access denied means the process is there, we just cannot open it.
+        return ctypes.get_last_error() == _ERROR_ACCESS_DENIED
+
     try:
-        code = ctypes.c_ulong()
-        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
-            return False
-        return code.value == _STILL_ACTIVE
+        # WAIT_TIMEOUT means the process handle is still unsignalled, i.e. it
+        # is running. This avoids GetExitCodeProcess's STILL_ACTIVE ambiguity,
+        # where a process exiting with code 259 looks alive forever.
+        return _kernel32.WaitForSingleObject(handle, 0) == _WAIT_TIMEOUT
     finally:
-        kernel32.CloseHandle(handle)
+        _kernel32.CloseHandle(handle)
 
 
 def is_alive(pid: int) -> bool:

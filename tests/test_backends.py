@@ -4,10 +4,11 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 
 import pytest
 
-from oncafe.backends import Wants, get_backend
+from oncafe.backends import BackendError, Wants, get_backend
 
 REASON = "oncafe: test"
 
@@ -18,10 +19,33 @@ def macos_assertions() -> str:
     ).stdout
 
 
+def linux_inhibitors() -> str:
+    return subprocess.run(
+        ["systemd-inhibit", "--list"], capture_output=True, text=True, check=True
+    ).stdout
+
+
 needs_pmset = pytest.mark.skipif(
     sys.platform != "darwin" or shutil.which("pmset") is None,
     reason="pmset is macOS only",
 )
+
+needs_logind = pytest.mark.skipif(
+    not sys.platform.startswith("linux") or shutil.which("systemd-inhibit") is None,
+    reason="systemd-inhibit is Linux only",
+)
+
+
+def holder_source(marker: str) -> str:
+    return (
+        "import sys, time;"
+        "sys.path.insert(0, 'src');"
+        "from oncafe.backends import get_backend, Wants;"
+        "b = get_backend();"
+        f"b.acquire(Wants(), {marker!r});"
+        "print('held', flush=True);"
+        "time.sleep(30)"
+    )
 
 
 def test_a_backend_exists_for_this_platform() -> None:
@@ -80,17 +104,7 @@ def test_macos_hold_does_not_survive_the_process() -> None:
     # child no chance to clean up after itself.
     marker = f"oncafe: kill test {os.getpid()}"
     child = subprocess.Popen(
-        [
-            sys.executable,
-            "-c",
-            "import sys, time;"
-            "sys.path.insert(0, 'src');"
-            "from oncafe.backends import get_backend, Wants;"
-            "b = get_backend();"
-            f"b.acquire(Wants(), {marker!r});"
-            "print('held', flush=True);"
-            "time.sleep(30)",
-        ],
+        [sys.executable, "-c", holder_source(marker)],
         stdout=subprocess.PIPE,
         text=True,
     )
@@ -103,3 +117,47 @@ def test_macos_hold_does_not_survive_the_process() -> None:
         child.wait()
 
     assert marker not in macos_assertions()
+
+
+@needs_logind
+def test_linux_hold_is_visible_to_logind() -> None:
+    backend = get_backend()
+    backend.acquire(Wants(system=True, display=False), REASON)
+    try:
+        assert REASON in linux_inhibitors()
+    finally:
+        backend.release()
+    assert REASON not in linux_inhibitors()
+
+
+@needs_logind
+def test_linux_rejects_keep_display_rather_than_ignoring_it() -> None:
+    # Silently not honouring --keep-display would be worse than refusing it.
+    backend = get_backend()
+    with pytest.raises(BackendError):
+        backend.acquire(Wants(system=True, display=True), REASON)
+
+
+@needs_logind
+def test_linux_hold_does_not_survive_the_process() -> None:
+    # The inhibitor is held by a systemd-inhibit child, so this checks the
+    # PR_SET_PDEATHSIG wiring: SIGKILL here must take the helper with it,
+    # rather than orphaning it still holding the lock.
+    marker = f"oncafe: kill test {os.getpid()}"
+    child = subprocess.Popen(
+        [sys.executable, "-c", holder_source(marker)],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert child.stdout is not None
+        assert child.stdout.readline().strip() == "held"
+        assert marker in linux_inhibitors()
+    finally:
+        child.kill()
+        child.wait()
+
+    deadline = time.monotonic() + 5
+    while marker in linux_inhibitors() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    assert marker not in linux_inhibitors()

@@ -17,7 +17,11 @@ def get_backend() -> Backend:
         from .windows import WindowsBackend
 
         return WindowsBackend()
+    if sys.platform.startswith("linux"):
+        from .linux import LinuxBackend
+
+        return LinuxBackend()
     raise BackendError(
         f"no wakelock backend for {sys.platform!r} yet "
-        "-- oncafe currently supports macOS and Windows"
+        "-- oncafe supports macOS, Windows and Linux"
     )

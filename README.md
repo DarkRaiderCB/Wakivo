@@ -82,14 +82,21 @@ macOS.
 
 ## Status
 
-macOS and Windows are verified: the hold is visible in `pmset -g assertions`
-and `powercfg /requests` respectively, and is reclaimed by the OS even on
-`SIGKILL` / `taskkill /F`.
+macOS, Windows and Linux all pass in CI, each asserting against its own power
+tooling — `pmset -g assertions`, `powercfg /requests`, `systemd-inhibit
+--list` — that the hold is visible to the OS and is reclaimed when the process
+is killed outright.
 
-**Linux is written but unverified.** It targets systemd-logind and was
-developed on a machine with no Linux available to test against, so the first
-run on Debian is the real test. `uv run pytest` covers it — three Linux tests
-skip elsewhere.
+Two honest limits on what that proves:
+
+- No CI runner ever idles into sleep, so CI shows the platform *accepts the
+  hold and reports it*, not that the machine stays awake. That part is
+  verified by hand, once per platform.
+- Linux is covered on `ubuntu-latest`, a headless systemd VM. That exercises
+  the logind path, which is the whole of the Linux backend today, but says
+  nothing about desktop environments — and `--keep-display`, which would need
+  the DE-specific screensaver interfaces, is refused on Linux rather than
+  silently ignored.
 
 ## Development
 

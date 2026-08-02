@@ -69,6 +69,17 @@ by the OS even on `SIGKILL` / `taskkill /F`.
 Linux support is planned via the systemd-logind inhibitor
 (`org.freedesktop.login1.Manager.Inhibit`), tested against Debian.
 
+## Development
+
+```sh
+uv sync
+uv run pytest
+```
+
+The backend tests take a real wakelock and assert the OS can see it, so they
+catch a broken `ctypes` signature before a user does. On macOS one of them
+`SIGKILL`s a child holding an assertion and checks the kernel reclaimed it.
+
 ## Licence
 
-MIT
+MIT — see [LICENSE](LICENSE).

@@ -18,6 +18,10 @@ _kernel32 = None
 
 
 def _is_alive_posix(pid: int) -> bool:
+    # Caveat: a zombie -- exited but not yet reaped by its parent -- still
+    # answers signal 0, so it reads as alive until the parent collects it.
+    # That is correct for our purpose: the pid stays allocated until then, and
+    # anything oncafe is asked to wait on has a parent that will reap it.
     try:
         os.kill(pid, 0)
     except ProcessLookupError:

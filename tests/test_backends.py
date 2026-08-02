@@ -217,6 +217,30 @@ def test_linux_hold_is_visible_to_logind() -> None:
 
 
 @needs_logind
+def test_linux_takes_a_gnome_hold_only_inside_a_gnome_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from oncafe.backends.linux import _in_gnome_session
+
+    monkeypatch.delenv("XDG_CURRENT_DESKTOP", raising=False)
+    monkeypatch.delenv("DBUS_SESSION_BUS_ADDRESS", raising=False)
+    assert not _in_gnome_session()
+
+    # A GNOME desktop without a session bus is not a session we can reach.
+    monkeypatch.setenv("XDG_CURRENT_DESKTOP", "GNOME")
+    assert not _in_gnome_session()
+
+    monkeypatch.setenv("DBUS_SESSION_BUS_ADDRESS", "unix:path=/run/user/1000/bus")
+    assert _in_gnome_session()
+
+    monkeypatch.setenv("XDG_CURRENT_DESKTOP", "ubuntu:GNOME")
+    assert _in_gnome_session()
+
+    monkeypatch.setenv("XDG_CURRENT_DESKTOP", "KDE")
+    assert not _in_gnome_session()
+
+
+@needs_logind
 def test_linux_rejects_keep_display_rather_than_ignoring_it() -> None:
     # Silently not honouring --keep-display would be worse than refusing it.
     backend = get_backend()

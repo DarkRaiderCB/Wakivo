@@ -76,9 +76,28 @@ the kernel kills the helper the moment `oncafe` dies, so the descriptor is
 dropped however we exit. Taking the fd directly would remove the child
 entirely and is worth doing later.
 
-The inhibitor is `--what=idle`, not `idle:sleep`, so an explicit
-`systemctl suspend` still works — matching `PreventUserIdleSystemSleep` on
-macOS.
+### Two holds on Linux, not one
+
+A logind inhibitor alone does not stop GNOME. Measured on Debian/GNOME: with
+oncafe holding `sleep:idle` in **block** mode — enough that `systemctl suspend`
+was refused outright — `gsd-power` suspended the machine 112 seconds into the
+hold. GNOME runs its own idle policy against its own session inhibitors, which
+live on the session bus and are entirely separate from logind's.
+
+So inside a GNOME session oncafe takes both: the logind inhibitor, which
+governs headless and non-GNOME systems, and `gnome-session-inhibit`, which is
+the one GNOME actually consults. Neither subsumes the other — a Debian server
+has no `gnome-session` at all.
+
+The logind hold uses `--what=idle:sleep`. `idle` covers logind's own
+`IdleAction`; `sleep` additionally covers desktops whose power daemon hasn't
+been measured here. The cost is that a deliberate `systemctl suspend` is
+refused while a hold is active, which differs from macOS, where
+`PreventUserIdleSystemSleep` leaves intentional sleep alone.
+
+The GNOME hold inhibits `suspend` only, deliberately not `idle` — GNOME's idle
+inhibitor also suppresses screen blanking and locking, and screen-off is
+oncafe's default.
 
 ## Status
 

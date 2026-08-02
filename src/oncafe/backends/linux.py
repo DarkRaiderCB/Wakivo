@@ -1,4 +1,4 @@
-"""Linux wakelock via a systemd-logind idle inhibitor.
+"""Linux wakelock via systemd-logind, plus GNOME's session inhibitor.
 
 The other backends call the platform API directly, because there the API is a
 single ctypes call and spawning a child would only add a way to strand the
@@ -12,6 +12,20 @@ orphaned child would hold the inhibitor open after oncafe was gone.
 PR_SET_PDEATHSIG closes it: the kernel kills the helper the moment this
 process dies, so the fd is dropped no matter how oncafe exits, SIGKILL
 included.
+
+Two holds, not one
+------------------
+A logind inhibitor alone is not enough under GNOME. Measured on Debian/GNOME:
+with oncafe holding `sleep:idle` in *block* mode -- enough that `systemctl
+suspend` was refused outright -- gsd-power still suspended the machine 112
+seconds into the hold. GNOME runs its own idle policy and consults its own
+session inhibitors, which live on the session bus and are entirely separate
+from logind's.
+
+So on a GNOME session we take both: logind for the path that governs headless
+and non-GNOME systems, and `gnome-session-inhibit` for the one GNOME actually
+checks. Neither subsumes the other -- a Debian server has no gnome-session at
+all.
 """
 
 from __future__ import annotations
@@ -28,10 +42,15 @@ from .base import BackendError, Wants
 _PR_SET_PDEATHSIG = 1
 _STARTUP_GRACE_SECONDS = 0.5
 
-# logind's own IdleAction, and the desktop idle-suspend that honours these
-# inhibitors. Deliberately not "sleep": an explicit `systemctl suspend` should
-# still work, matching PreventUserIdleSystemSleep on macOS.
-_WHAT = "idle"
+# logind: "idle" blocks its own IdleAction, which is what governs a headless
+# machine. "sleep" additionally blocks Suspend() calls, covering desktops
+# whose power daemon we have not measured. The cost is that a deliberate
+# `systemctl suspend` is refused while a hold is active.
+_LOGIND_WHAT = "idle:sleep"
+
+# GNOME: "suspend" only, deliberately not "idle". GNOME's idle inhibitor also
+# suppresses screen blanking and locking, and screen-off is oncafe's default.
+_GNOME_WHAT = "suspend"
 
 
 def _load_libc() -> ctypes.CDLL:
@@ -42,19 +61,28 @@ def _load_libc() -> ctypes.CDLL:
         raise BackendError(f"could not load libc: {error}") from None
 
 
+def _in_gnome_session() -> bool:
+    """True when this process is inside a GNOME session with a session bus."""
+    desktop = os.environ.get("XDG_CURRENT_DESKTOP", "")
+    if "gnome" not in desktop.lower():
+        return False
+    return bool(os.environ.get("DBUS_SESSION_BUS_ADDRESS"))
+
+
 class LinuxBackend:
     name = "systemd-logind"
 
     def __init__(self) -> None:
-        self._inhibit = shutil.which("systemd-inhibit")
-        if self._inhibit is None:
+        self._systemd_inhibit = shutil.which("systemd-inhibit")
+        if self._systemd_inhibit is None:
             raise BackendError(
                 "systemd-inhibit not found -- oncafe needs systemd-logind on Linux"
             )
-        # Loaded before the fork: doing it in the child would mean running the
-        # dynamic loader after fork, which is not safe.
+        self._gnome_inhibit = shutil.which("gnome-session-inhibit")
+        # Loaded before the fork: running the dynamic loader in the child
+        # after fork is not safe.
         self._libc = _load_libc()
-        self._process: subprocess.Popen[bytes] | None = None
+        self._holders: list[subprocess.Popen[bytes]] = []
 
     def acquire(self, wants: Wants, reason: str) -> None:
         if wants.display:
@@ -63,17 +91,57 @@ class LinuxBackend:
                 "desktop-specific screensaver interfaces rather than logind"
             )
 
-        argv = [
-            self._inhibit,
-            f"--what={_WHAT}",
-            "--who=oncafe",
-            f"--why={reason}",
-            "--mode=block",
-            # cat blocks until its stdin closes, so releasing the hold is just
-            # closing a pipe -- no signals, no timeouts, no magic durations.
-            "cat",
-        ]
+        try:
+            self._spawn(
+                [
+                    self._systemd_inhibit,
+                    f"--what={_LOGIND_WHAT}",
+                    "--who=oncafe",
+                    f"--why={reason}",
+                    "--mode=block",
+                    # cat blocks until its stdin closes, so releasing a hold is
+                    # just closing a pipe -- no signals, no timeouts, no magic
+                    # durations.
+                    "cat",
+                ]
+            )
 
+            if _in_gnome_session():
+                if self._gnome_inhibit is None:
+                    raise BackendError(
+                        "this is a GNOME session, where a logind inhibitor alone "
+                        "does not prevent suspend, but gnome-session-inhibit was "
+                        "not found -- install gnome-session-bin"
+                    )
+                self._spawn(
+                    [
+                        self._gnome_inhibit,
+                        "--app-id=oncafe",
+                        f"--reason={reason}",
+                        f"--inhibit={_GNOME_WHAT}",
+                        "cat",
+                    ]
+                )
+        except BaseException:
+            # Never leave a partial set of holds behind.
+            self.release()
+            raise
+
+    def release(self) -> None:
+        holders, self._holders = self._holders, []
+        for process in reversed(holders):
+            if process.stdin is not None:
+                try:
+                    process.stdin.close()
+                except BrokenPipeError:
+                    pass
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+
+    def _spawn(self, argv: list[str]) -> None:
         process = subprocess.Popen(
             argv,
             stdin=subprocess.PIPE,
@@ -82,38 +150,21 @@ class LinuxBackend:
             preexec_fn=self._die_with_parent(os.getpid()),
         )
 
-        # systemd-inhibit fails fast when logind refuses -- no session bus, or
-        # polkit denying the inhibitor. Catch that here rather than reporting
-        # a hold that was never taken.
+        # These fail fast when refused -- no session bus, or polkit denying the
+        # inhibitor. Catch it here rather than reporting a hold never taken.
         try:
             process.wait(timeout=_STARTUP_GRACE_SECONDS)
         except subprocess.TimeoutExpired:
-            self._process = process
+            self._holders.append(process)
             return
 
         detail = ""
         if process.stderr is not None:
             detail = process.stderr.read().decode("utf-8", "replace").strip()
         raise BackendError(
-            f"systemd-inhibit exited immediately with code {process.returncode}"
-            + (f": {detail}" if detail else "")
+            f"{os.path.basename(argv[0])} exited immediately with code "
+            f"{process.returncode}" + (f": {detail}" if detail else "")
         )
-
-    def release(self) -> None:
-        process, self._process = self._process, None
-        if process is None:
-            return
-
-        if process.stdin is not None:
-            try:
-                process.stdin.close()
-            except BrokenPipeError:
-                pass
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
 
     def _die_with_parent(self, parent_pid: int):
         libc = self._libc

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import os
 import shutil
 import subprocess
@@ -19,6 +20,33 @@ def macos_assertions() -> str:
     ).stdout
 
 
+def windows_requests(section: str) -> list[str]:
+    """Entries under one section of `powercfg /requests`, e.g. SYSTEM."""
+    output = subprocess.run(
+        ["powercfg", "/requests"], capture_output=True, text=True, check=True
+    ).stdout
+
+    entries: list[str] = []
+    capturing = False
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped.endswith(":") and stripped[:-1].isupper():
+            capturing = stripped[:-1] == section
+            continue
+        if capturing and stripped and stripped != "None.":
+            entries.append(stripped)
+    return entries
+
+
+def is_elevated() -> bool:
+    if sys.platform != "win32":
+        return False
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except OSError:
+        return False
+
+
 def linux_inhibitors() -> str:
     return subprocess.run(
         ["systemd-inhibit", "--list"], capture_output=True, text=True, check=True
@@ -33,6 +61,11 @@ needs_pmset = pytest.mark.skipif(
 needs_logind = pytest.mark.skipif(
     not sys.platform.startswith("linux") or shutil.which("systemd-inhibit") is None,
     reason="systemd-inhibit is Linux only",
+)
+
+needs_powercfg = pytest.mark.skipif(
+    sys.platform != "win32" or not is_elevated(),
+    reason="powercfg /requests needs an elevated Windows shell",
 )
 
 
@@ -117,6 +150,59 @@ def test_macos_hold_does_not_survive_the_process() -> None:
         child.wait()
 
     assert marker not in macos_assertions()
+
+
+@needs_powercfg
+def test_windows_system_hold_is_visible_to_the_os() -> None:
+    # powercfg reports the holding executable, not our reason string, and the
+    # test runner is itself python.exe -- so compare against a baseline rather
+    # than matching on a name.
+    backend = get_backend()
+    baseline = windows_requests("SYSTEM")
+    backend.acquire(Wants(system=True, display=False), REASON)
+    try:
+        assert len(windows_requests("SYSTEM")) > len(baseline)
+    finally:
+        backend.release()
+    assert windows_requests("SYSTEM") == baseline
+
+
+@needs_powercfg
+def test_windows_display_flag_adds_a_display_request() -> None:
+    backend = get_backend()
+    baseline = windows_requests("DISPLAY")
+    backend.acquire(Wants(system=True, display=True), REASON)
+    try:
+        assert len(windows_requests("DISPLAY")) > len(baseline)
+    finally:
+        backend.release()
+    assert windows_requests("DISPLAY") == baseline
+
+
+@needs_powercfg
+def test_windows_hold_does_not_survive_the_process() -> None:
+    # ES_CONTINUOUS is per-thread state, so this checks Windows really does
+    # reclaim it when the holding process is killed outright.
+    baseline = windows_requests("SYSTEM")
+    child = subprocess.Popen(
+        [sys.executable, "-c", holder_source(REASON)],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert child.stdout is not None
+        assert child.stdout.readline().strip() == "held"
+        assert len(windows_requests("SYSTEM")) > len(baseline)
+    finally:
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(child.pid)], capture_output=True
+        )
+        child.wait()
+
+    deadline = time.monotonic() + 5
+    while len(windows_requests("SYSTEM")) > len(baseline) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    assert windows_requests("SYSTEM") == baseline
 
 
 @needs_logind

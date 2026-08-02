@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing should never hide the state of the other two --
+      # the whole point of the matrix is per-platform signal.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        run: python -m pip install --upgrade uv
+
+      - name: Install project
+        run: uv sync --locked
+
+      # CI cannot prove the machine stays awake -- no runner ever idles into
+      # sleep. What it does prove is that the platform accepts our calls and
+      # reports the hold, which is the bug class that actually keeps biting:
+      # wrong ctypes signatures and platform-specific liveness logic.
+      - name: Power tooling (macOS)
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        run: pmset -g assertions
+
+      - name: Power tooling (Linux)
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        run: |
+          systemctl is-system-running || true
+          which systemd-inhibit
+          systemd-inhibit --list
+
+      - name: Power tooling (Windows)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: powercfg /requests
+
+      # -ra prints the reason for every skip. The failure mode to watch for is
+      # a green run where all the platform tests quietly skipped and nothing
+      # touched the OS at all.
+      - name: Test
+        run: uv run pytest -v -ra

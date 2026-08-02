@@ -1,5 +1,7 @@
 # oncafe
 
+[![CI](https://github.com/DarkRaiderCB/OnCafe/actions/workflows/ci.yml/badge.svg)](https://github.com/DarkRaiderCB/OnCafe/actions/workflows/ci.yml)
+
 Keep your machine awake for as long as a task actually runs — then let it sleep again.
 
 Built for the case where you start something long (an agentic coding session, a training run, a big build), walk away from your desk, and come back to find the machine went to sleep half way through.

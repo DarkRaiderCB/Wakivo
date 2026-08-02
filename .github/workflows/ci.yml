@@ -27,8 +27,12 @@ jobs:
       - name: Install uv
         run: python -m pip install --upgrade uv
 
+      # Deliberately not --locked. A local uv.toml setting such as
+      # exclude-newer is written into uv.lock, and CI has no such config, so
+      # --locked turns any contributor's uv settings into a CI failure. The
+      # only dependency here is pytest; that is not worth the papercut.
       - name: Install project
-        run: uv sync --locked
+        run: uv sync
 
       # CI cannot prove the machine stays awake -- no runner ever idles into
       # sleep. What it does prove is that the platform accepts our calls and

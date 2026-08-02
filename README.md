@@ -33,16 +33,39 @@ Requires Python 3.13+.
 
 Durations accept `90s`, `20m`, `2h`, `1h30m`, or a bare number of seconds.
 
-## Known limitation: closing the lid
+## Scope
 
-**Closing the lid will still put the machine to sleep.** This is expected, not a bug.
+oncafe prevents **idle sleep** — the machine suspending because you stopped
+touching it. That is the failure that interrupts a long task. Everything else
+is deliberately out of scope.
 
-The lid switch is a hardware event, separate from idle sleep. No wakelock on any
-platform survives it — not `caffeinate`, not `SetThreadExecutionState`, not
-`oncafe`. Holding a laptop awake through a closed lid requires root and a
-*persistent* change to system power settings, which means a crash could leave
-your machine permanently unable to sleep. That trade is deliberately not made
-here. It may return later as an explicit opt-in flag.
+| Behaviour | Held off? |
+| --- | --- |
+| Idle system sleep / suspend | **Yes** — the entire point |
+| Screen blanking | No by default; `-d` on macOS and Windows |
+| Session lock / password prompt | No |
+| Closing the lid | **No** |
+| Suspend at critical battery | **No** |
+| Deliberate sleep (`systemctl suspend`, menu, ⌘⌥⏏) | Allowed on macOS and Windows; refused on Linux where the stronger hold is permitted |
+
+A blanked, locked screen with your job still running is the *intended*
+outcome, not a failure — it is why screen-off is the default rather than `-d`.
+Neither blanking nor locking stops a running process.
+
+Two of those rows are worth explaining, because they surprise people:
+
+**Closing the lid still sleeps the machine.** The lid switch is a hardware
+event, separate from idle sleep, and no wakelock on any platform survives it —
+not `caffeinate`, not `SetThreadExecutionState`, not `oncafe`. Holding a laptop
+awake through a closed lid requires root and a *persistent* change to system
+power settings, so a crash could leave your machine permanently unable to
+sleep. That trade is deliberately not made here. It may return as an explicit
+opt-in flag.
+
+**A critical battery still sleeps the machine.** UPower on Linux, and the
+equivalent elsewhere, suspends or hibernates directly at critical charge and
+ignores every inhibitor by design. You cannot inhibit your way out of a dying
+battery, and shouldn't be able to.
 
 ## Design
 
@@ -51,7 +74,8 @@ Two independent axes:
 - **`backends/`** — *how* the hold is taken, per platform. macOS uses IOKit
   power assertions via `ctypes`; Windows uses `SetThreadExecutionState` on a
   dedicated parked thread, because the flag is per-thread and evaporates when
-  the setting thread exits; Linux takes a systemd-logind idle inhibitor.
+  the setting thread exits; Linux takes a systemd-logind inhibitor, plus
+  GNOME's own session inhibitor when running inside a GNOME session.
 - **`triggers/`** — *when* the hold is released: a command exiting, a pid dying,
   a timer, or an interrupt.
 
@@ -78,11 +102,23 @@ entirely and is worth doing later.
 
 ### Two holds on Linux, not one
 
-A logind inhibitor alone does not stop GNOME. Measured on Debian/GNOME: with
-oncafe holding `sleep:idle` in **block** mode — enough that `systemctl suspend`
-was refused outright — `gsd-power` suspended the machine 112 seconds into the
-hold. GNOME runs its own idle policy against its own session inhibitors, which
-live on the session bus and are entirely separate from logind's.
+A logind inhibitor alone does not stop GNOME. Measured on Debian/GNOME with a
+60-second idle timeout, journal markers either side of the hold:
+
+```
+18:51:41  CONTROL START
+18:52:41  will suspend now      <- 60s, control valid
+18:54:26  HOLD START
+18:56:18  will suspend now      <- 112s, suspended mid-hold
+18:59:31  HOLD END
+```
+
+oncafe was holding `sleep:idle` in **block** mode throughout — strong enough
+that `systemctl suspend` was refused outright — and `gsd-power` suspended the
+machine anyway. GNOME runs its own idle policy against its own session
+inhibitors, which live on the session bus and are entirely separate from
+logind's. Adding `gnome-session-inhibit` fixed it: the same run now reaches
+`HOLD END` with no suspend in between.
 
 So inside a GNOME session oncafe takes both: the logind inhibitor, which
 governs headless and non-GNOME systems, and `gnome-session-inhibit`, which is
@@ -112,16 +148,22 @@ tooling — `pmset -g assertions`, `powercfg /requests`, `systemd-inhibit
 --list` — that the hold is visible to the OS and is reclaimed when the process
 is killed outright.
 
-Two honest limits on what that proves:
+Beyond CI, each platform has been exercised by hand — including Debian/GNOME
+on real hardware, where a machine set to suspend after 60 seconds idle stayed
+awake through a four-minute hold.
+
+Two honest limits on what CI itself proves:
 
 - No CI runner ever idles into sleep, so CI shows the platform *accepts the
-  hold and reports it*, not that the machine stays awake. That part is
-  verified by hand, once per platform.
-- Linux is covered on `ubuntu-latest`, a headless systemd VM. That exercises
-  the logind path, which is the whole of the Linux backend today, but says
-  nothing about desktop environments — and `--keep-display`, which would need
-  the DE-specific screensaver interfaces, is refused on Linux rather than
-  silently ignored.
+  hold and reports it*, not that the machine stays awake. That part is only
+  verifiable by hand.
+- Linux runs on `ubuntu-latest`, a headless systemd VM with no seat session.
+  It covers the logind path and the fallback to an idle-only hold, but never
+  reaches the GNOME branch — which is exactly where the bug above lived.
+  Desktop coverage is manual.
+
+`--keep-display` is unimplemented on Linux; it needs the DE-specific
+screensaver interfaces, and is refused rather than silently ignored.
 
 ## Development
 

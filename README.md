@@ -148,9 +148,16 @@ tooling — `pmset -g assertions`, `powercfg /requests`, `systemd-inhibit
 --list` — that the hold is visible to the OS and is reclaimed when the process
 is killed outright.
 
-Beyond CI, each platform has been exercised by hand — including Debian/GNOME
-on real hardware, where a machine set to suspend after 60 seconds idle stayed
-awake through a four-minute hold.
+Beyond CI, all three have been verified on real hardware the only way that
+counts: shorten the idle timeout to one minute, confirm with a control run
+that the machine *does* sleep, then hold for four minutes and confirm it
+doesn't.
+
+| Platform | Control confirmed by | Result |
+| --- | --- | --- |
+| macOS | `pmset -g log` idle sleep entries | stayed awake |
+| Windows | Kernel-Power Event 42 | stayed awake |
+| Debian / GNOME | journal markers around the hold | stayed awake |
 
 Two honest limits on what CI itself proves:
 

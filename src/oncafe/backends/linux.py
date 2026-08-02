@@ -42,11 +42,18 @@ from .base import BackendError, Wants
 _PR_SET_PDEATHSIG = 1
 _STARTUP_GRACE_SECONDS = 0.5
 
-# logind: "idle" blocks its own IdleAction, which is what governs a headless
-# machine. "sleep" additionally blocks Suspend() calls, covering desktops
-# whose power daemon we have not measured. The cost is that a deliberate
-# `systemctl suspend` is refused while a hold is active.
-_LOGIND_WHAT = "idle:sleep"
+# Tried in order, first one that is permitted wins.
+#
+# Blocking "sleep" additionally stops Suspend() calls, which covers desktops
+# whose power daemon we have not measured -- but it needs the
+# org.freedesktop.login1.inhibit-block-sleep polkit action, which is denied
+# without an active seat session. Headless servers and CI runners have no such
+# session and are refused outright.
+#
+# Blocking "idle" alone is granted broadly and covers logind's own IdleAction,
+# which is exactly what governs those headless machines. It is a weaker hold
+# on a desktop, but GNOME is handled by its own inhibitor below regardless.
+_LOGIND_WHAT_PREFERENCES = ("idle:sleep", "idle")
 
 # GNOME: "suspend" only, deliberately not "idle". GNOME's idle inhibitor also
 # suppresses screen blanking and locking, and screen-off is oncafe's default.
@@ -92,19 +99,7 @@ class LinuxBackend:
             )
 
         try:
-            self._spawn(
-                [
-                    self._systemd_inhibit,
-                    f"--what={_LOGIND_WHAT}",
-                    "--who=oncafe",
-                    f"--why={reason}",
-                    "--mode=block",
-                    # cat blocks until its stdin closes, so releasing a hold is
-                    # just closing a pipe -- no signals, no timeouts, no magic
-                    # durations.
-                    "cat",
-                ]
-            )
+            self._acquire_logind(reason)
 
             if _in_gnome_session():
                 if self._gnome_inhibit is None:
@@ -126,6 +121,29 @@ class LinuxBackend:
             # Never leave a partial set of holds behind.
             self.release()
             raise
+
+    def _acquire_logind(self, reason: str) -> None:
+        last: BackendError | None = None
+        for what in _LOGIND_WHAT_PREFERENCES:
+            try:
+                self._spawn(
+                    [
+                        self._systemd_inhibit,
+                        f"--what={what}",
+                        "--who=oncafe",
+                        f"--why={reason}",
+                        "--mode=block",
+                        # cat blocks until its stdin closes, so releasing a
+                        # hold is just closing a pipe -- no signals, no
+                        # timeouts, no magic durations.
+                        "cat",
+                    ]
+                )
+                return
+            except BackendError as error:
+                last = error
+        assert last is not None
+        raise last
 
     def release(self) -> None:
         holders, self._holders = self._holders, []

@@ -89,10 +89,16 @@ governs headless and non-GNOME systems, and `gnome-session-inhibit`, which is
 the one GNOME actually consults. Neither subsumes the other — a Debian server
 has no `gnome-session` at all.
 
-The logind hold uses `--what=idle:sleep`. `idle` covers logind's own
-`IdleAction`; `sleep` additionally covers desktops whose power daemon hasn't
-been measured here. The cost is that a deliberate `systemctl suspend` is
-refused while a hold is active, which differs from macOS, where
+The logind hold tries `--what=idle:sleep` first and falls back to `idle`.
+Blocking `sleep` also stops `Suspend()` calls, covering desktops whose power
+daemon hasn't been measured here — but it needs the
+`org.freedesktop.login1.inhibit-block-sleep` polkit action, which is denied
+without an active seat session, so headless servers and CI runners are refused
+outright. Blocking `idle` is granted broadly and covers logind's own
+`IdleAction`, which is exactly what governs those machines.
+
+Where the stronger hold is permitted, a deliberate `systemctl suspend` is
+refused while oncafe runs. That differs from macOS, where
 `PreventUserIdleSystemSleep` leaves intentional sleep alone.
 
 The GNOME hold inhibits `suspend` only, deliberately not `idle` — GNOME's idle

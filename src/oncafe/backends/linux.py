@@ -109,11 +109,16 @@ class LinuxBackend:
                         "not found -- install gnome-session-bin"
                     )
                 self._spawn(
+                    # Space-separated, not --opt=value: gnome-session-inhibit
+                    # parses argv with exact string comparisons rather than
+                    # GLib, so "--app-id=oncafe" matches no option and falls
+                    # through to the COMMAND position, where it tries to
+                    # execute it. systemd-inhibit does accept --what=.
                     [
                         self._gnome_inhibit,
-                        "--app-id=oncafe",
-                        f"--reason={reason}",
-                        f"--inhibit={_GNOME_WHAT}",
+                        "--app-id", "oncafe",
+                        "--reason", reason,
+                        "--inhibit", _GNOME_WHAT,
                         "cat",
                     ]
                 )

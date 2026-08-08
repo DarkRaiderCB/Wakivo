@@ -330,14 +330,16 @@ def _windows_target() -> tuple[str, str]:
     python.exe is last because it is the one that leaves a black window
     sitting behind the tray icon for as long as the app runs.
     """
-    # Declared under [project.gui-scripts], so the generated exe is the
-    # windowless variant -- the best target when it is present.
+    # Declared under [project.gui-scripts], so the generated exe should be the
+    # windowless variant -- but only if it was generated *after* that move. An
+    # environment installed before it still holds a console shim, and pointing
+    # a shortcut at that puts a black window behind the tray icon. Ask the
+    # binary rather than trusting the declaration.
     shim = Path(sys.executable).with_name("oncafe-gui.exe")
-    if shim.exists():
-        return str(shim), ""
     on_path = shutil.which("oncafe-gui")
-    if on_path:
-        return on_path, ""
+    for candidate in (shim, Path(on_path) if on_path else None):
+        if candidate and candidate.exists() and _is_windowless(candidate):
+            return str(candidate), ""
 
     # Otherwise pythonw, wherever this interpreter keeps it: beside the
     # executable in a virtualenv, at the prefix root for a base install.
@@ -350,6 +352,31 @@ def _windows_target() -> tuple[str, str]:
             return str(candidate), "-m oncafe.gui"
 
     return str(sys.executable), "-m oncafe.gui"
+
+
+_IMAGE_SUBSYSTEM_WINDOWS_GUI = 2
+
+
+def _is_windowless(executable: Path) -> bool:
+    """Whether a PE binary is a GUI subsystem image rather than a console one.
+
+    The subsystem field is what decides if Windows attaches a console, and it
+    sits at a fixed offset that is the same for PE32 and PE32+: the optional
+    header begins 24 bytes past the PE signature, and Subsystem is 68 bytes
+    into it.
+    """
+    try:
+        with executable.open("rb") as handle:
+            handle.seek(0x3C)
+            pe_offset = int.from_bytes(handle.read(4), "little")
+            handle.seek(pe_offset)
+            if handle.read(4) != b"PE\0\0":
+                return False
+            handle.seek(pe_offset + 24 + 68)
+            subsystem = int.from_bytes(handle.read(2), "little")
+    except OSError:
+        return False
+    return subsystem == _IMAGE_SUBSYSTEM_WINDOWS_GUI
 
 
 def _create_shortcut(path: Path, target: str, arguments: str, ico: Path) -> None:

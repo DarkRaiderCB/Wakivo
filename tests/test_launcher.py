@@ -187,6 +187,31 @@ def test_the_app_icon_has_its_own_ground() -> None:
     assert image.getpixel((6, 64))[:3] in (APP_GROUND[:3], (0, 0, 0))
 
 
+def write_pe(path: Path, subsystem: int) -> None:
+    """A PE header just complete enough for the subsystem check."""
+    pe_offset = 0x80
+    data = bytearray(pe_offset + 24 + 70)
+    data[0x3C:0x40] = pe_offset.to_bytes(4, "little")
+    data[pe_offset : pe_offset + 4] = b"PE\0\0"
+    offset = pe_offset + 24 + 68
+    data[offset : offset + 2] = subsystem.to_bytes(2, "little")
+    path.write_bytes(bytes(data))
+
+
+def test_a_console_shim_is_not_treated_as_windowless(tmp_path) -> None:
+    from oncafe.gui.launcher import _is_windowless
+
+    gui, console, junk = (tmp_path / n for n in ("g.exe", "c.exe", "j.exe"))
+    write_pe(gui, 2)
+    write_pe(console, 3)
+    junk.write_bytes(b"not a PE file at all")
+
+    assert _is_windowless(gui)
+    assert not _is_windowless(console)
+    assert not _is_windowless(junk)
+    assert not _is_windowless(tmp_path / "missing.exe")
+
+
 def test_windows_target_avoids_a_console_window(tmp_path, monkeypatch) -> None:
     # The whole point of the shortcut is launching without a terminal; a
     # console window sitting behind the tray icon defeats it.
@@ -203,6 +228,11 @@ def test_windows_target_avoids_a_console_window(tmp_path, monkeypatch) -> None:
     (tmp_path / "pythonw.exe").touch()
     assert launcher._windows_target() == (str(tmp_path / "pythonw.exe"), "-m oncafe.gui")
 
-    # The gui-scripts shim wins outright, and needs no arguments.
-    (tmp_path / "oncafe-gui.exe").touch()
+    # A shim left over from before the entry point moved to gui-scripts is a
+    # console binary, and must be passed over rather than trusted by name.
+    write_pe(tmp_path / "oncafe-gui.exe", 3)
+    assert launcher._windows_target() == (str(tmp_path / "pythonw.exe"), "-m oncafe.gui")
+
+    # A genuine gui-scripts shim wins outright, and needs no arguments.
+    write_pe(tmp_path / "oncafe-gui.exe", 2)
     assert launcher._windows_target() == (str(tmp_path / "oncafe-gui.exe"), "")

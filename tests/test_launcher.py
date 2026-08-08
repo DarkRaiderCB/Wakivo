@@ -62,17 +62,73 @@ def test_the_bundle_stays_out_of_the_dock(home) -> None:
     assert plist["CFBundleIconFile"] == "OnCafe"
 
 
+def boot_module(app: Path) -> Path:
+    minor = sys.version_info.minor
+    return app / "Contents" / "lib" / f"python3.{minor}" / "site-packages" / "sitecustomize.py"
+
+
 @macos_only
-def test_the_stub_runs_the_interpreter_not_a_console_script(home) -> None:
+def test_the_bundle_executable_is_a_real_copy_of_the_interpreter(home) -> None:
+    # Three constraints, each found by measurement:
+    #   - a shell stub that execs Python replaces the process LaunchServices
+    #     registered, and the app then silently loses the right to own a status
+    #     item: created, never granted a slot, zero height, never appears
+    #   - a symlink is rejected by codesign, which wants a regular file
+    #   - so it has to be a copy
     from oncafe.gui.launcher import install
 
     (app,) = install()
-    stub = (app / "Contents" / "MacOS" / "OnCafe").read_text()
+    executable = app / "Contents" / "MacOS" / "OnCafe"
 
-    # PATH is not what you would expect when Finder launches something, so the
-    # launcher must not depend on a console script being findable.
-    assert sys.executable in stub
-    assert "-m oncafe.gui" in stub
+    assert executable.is_file()
+    assert not executable.is_symlink()
+    assert executable.stat().st_mode & 0o111
+
+
+@macos_only
+def test_the_bundle_is_a_virtualenv_so_the_boot_module_is_found(home) -> None:
+    # LaunchServices runs the executable with no arguments, so there is no
+    # `-m oncafe.gui` to hand it. Reaching it through LSEnvironment was tried
+    # and does not work on current macOS at all, so the bundle is instead built
+    # as a virtualenv and sitecustomize does the work.
+    from oncafe.gui.launcher import install
+
+    (app,) = install()
+
+    config = app / "Contents" / "MacOS" / "pyvenv.cfg"
+    assert config.is_file(), "must sit beside the executable; Contents/ is ignored"
+    assert "home = " in config.read_text()
+
+    source = boot_module(app).read_text()
+    assert "from oncafe.gui import main" in source
+
+    # No environment reliance left over.
+    plist = plistlib.loads((app / "Contents" / "Info.plist").read_bytes())
+    assert "LSEnvironment" not in plist
+
+
+@macos_only
+def test_the_interpreter_can_find_its_library_inside_the_bundle(home) -> None:
+    # The copied binary loads its library through @executable_path/../lib.
+    from oncafe.gui.launcher import install
+
+    (app,) = install()
+    dylibs = list((app / "Contents" / "lib").glob("*.dylib"))
+    assert dylibs, "the copied interpreter would not start without these"
+
+
+@macos_only
+def test_the_boot_module_records_where_to_import_from(home) -> None:
+    # The bundled interpreter is a copy of the *base* install, so it comes up
+    # without the virtualenv's site-packages and has to be told where they are.
+    from oncafe.gui.launcher import install
+
+    (app,) = install()
+    source = boot_module(app).read_text()
+
+    import oncafe
+
+    assert str(Path(oncafe.__file__).resolve().parent.parent) in source
 
 
 @macos_only
@@ -88,7 +144,10 @@ def test_startup_is_opt_in(home) -> None:
 
     plist = plistlib.loads(agent.read_bytes())
     assert plist["RunAtLoad"] is True
-    assert plist["ProgramArguments"][:1] == [sys.executable]
+    # Launches the bundle, not the interpreter: started any other way the
+    # status item never receives a slot in the menu bar.
+    assert plist["ProgramArguments"][:2] == ["/usr/bin/open", "-a"]
+    assert plist["ProgramArguments"][2].endswith("OnCafe.app")
 
 
 @macos_only

@@ -18,12 +18,11 @@ from oncafe.backends import BackendError
 
 from .test_session import FakeBackend
 
-pytest.importorskip("pystray", reason="the GUI extra is not installed")
+# Before importing pystray: see the note in test_gui.py.
+if sys.platform not in gui.SUPPORTED_PLATFORMS:
+    pytest.skip("the tray front end targets macOS and Windows", allow_module_level=True)
 
-pytestmark = pytest.mark.skipif(
-    sys.platform not in gui.SUPPORTED_PLATFORMS,
-    reason="the tray front end targets macOS and Windows",
-)
+pytest.importorskip("pystray", reason="the GUI extra is not installed")
 
 
 class CountingIcon:

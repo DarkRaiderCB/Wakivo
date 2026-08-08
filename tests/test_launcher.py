@@ -128,7 +128,7 @@ def test_the_boot_module_records_where_to_import_from(home) -> None:
 
     import oncafe
 
-    assert str(Path(oncafe.__file__).resolve().parent.parent) in source
+    assert repr(str(Path(oncafe.__file__).resolve().parent.parent)) in source
 
 
 @macos_only
@@ -253,5 +253,7 @@ def test_the_windows_launcher_script_restores_the_import_paths(tmp_path, monkeyp
     import oncafe
 
     source = launcher._windows_launcher_path().read_text()
-    assert str(Path(oncafe.__file__).resolve().parent.parent) in source
+    # repr, because the paths are embedded with {roots!r} -- on Windows the
+    # separators come out escaped and the raw path never appears.
+    assert repr(str(Path(oncafe.__file__).resolve().parent.parent)) in source
     assert "from oncafe.gui import main" in source

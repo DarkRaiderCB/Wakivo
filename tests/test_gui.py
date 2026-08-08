@@ -9,15 +9,15 @@ from oncafe.backends import BackendError, Wants
 
 from .test_session import FakeBackend, wait_until
 
+# Skipped before pystray is imported at all: on a headless Linux runner it
+# raises Xlib.error.DisplayNameError while selecting a backend, which
+# importorskip does not catch, and collection fails outright.
+if sys.platform not in gui.SUPPORTED_PLATFORMS:
+    pytest.skip("the tray front end targets macOS and Windows", allow_module_level=True)
+
 pystray = pytest.importorskip("pystray", reason="the GUI extra is not installed")
 
 from oncafe.gui import icon  # noqa: E402  -- needs the extra imported above
-
-needs_tray = pytest.mark.skipif(
-    sys.platform not in gui.SUPPORTED_PLATFORMS,
-    reason="the tray front end targets macOS and Windows",
-)
-
 
 @pytest.fixture
 def app():
@@ -51,7 +51,6 @@ def test_the_two_icon_states_are_distinguishable() -> None:
     assert coverage(holding) > coverage(idle)
 
 
-@needs_tray
 def test_macos_draws_black_and_lets_the_system_recolour_it() -> None:
     from oncafe.gui.app import _ink
     from oncafe.gui.icon import BLACK, WHITE
@@ -62,7 +61,6 @@ def test_macos_draws_black_and_lets_the_system_recolour_it() -> None:
         assert _ink() in (BLACK, WHITE)
 
 
-@needs_tray
 def test_menu_offers_only_the_two_modes(app) -> None:
     # The whole premise of the GUI is that it stays small. Anyone needing to
     # scope a hold to a process is served by the CLI.
@@ -72,7 +70,6 @@ def test_menu_offers_only_the_two_modes(app) -> None:
     assert not any("pid" in label.lower() or "process" in label.lower() for label in labels)
 
 
-@needs_tray
 def test_status_text_tracks_the_hold(app) -> None:
     assert "Not holding" in app._status_text()
 
@@ -83,7 +80,6 @@ def test_status_text_tracks_the_hold(app) -> None:
     assert "Not holding" in app._status_text()
 
 
-@needs_tray
 @pytest.mark.parametrize(
     ("seconds", "expected"),
     [
@@ -99,7 +95,6 @@ def test_a_duration_shows_a_countdown(app, seconds: int, expected: str) -> None:
     assert app._status_text() == expected
 
 
-@needs_tray
 def test_picking_a_duration_replaces_a_running_hold(app) -> None:
     backend = app._controller._backend
 
@@ -110,7 +105,6 @@ def test_picking_a_duration_replaces_a_running_hold(app) -> None:
     assert backend.held
 
 
-@needs_tray
 def test_the_display_option_reads_as_a_modifier(app) -> None:
     # It changes nothing until a hold starts, so the label must not present
     # itself as a live state.
@@ -119,7 +113,6 @@ def test_the_display_option_reads_as_a_modifier(app) -> None:
     assert display.lower().startswith("also")
 
 
-@needs_tray
 def test_keep_display_applies_to_the_hold_already_running(app) -> None:
     backend = app._controller._backend
 
@@ -131,7 +124,6 @@ def test_keep_display_applies_to_the_hold_already_running(app) -> None:
     assert backend.wants[-1] == Wants(system=True, display=True)
 
 
-@needs_tray
 def test_toggling_display_while_idle_takes_no_hold(app) -> None:
     backend = app._controller._backend
     app._toggle_display()
@@ -139,7 +131,6 @@ def test_toggling_display_while_idle_takes_no_hold(app) -> None:
     assert backend.calls == []
 
 
-@needs_tray
 def test_a_refused_backend_is_reported_in_the_menu(app) -> None:
     def refuse(wants, reason):
         raise BackendError("polkit said no")
@@ -152,25 +143,15 @@ def test_a_refused_backend_is_reported_in_the_menu(app) -> None:
     assert not app._controller.status().active
 
 
-@needs_tray
 def test_an_expired_timer_returns_the_menu_to_idle(app) -> None:
     app._hold_for(1)()
     app._controller._trigger.cancel()
     assert wait_until(lambda: "Not holding" in app._status_text())
 
 
-@needs_tray
 def test_quit_releases_the_hold(app) -> None:
     backend = app._controller._backend
     app._hold_open_ended()
     app._icon.stop = lambda: None
     app._quit()
     assert not backend.held
-
-
-@pytest.mark.skipif(
-    sys.platform in gui.SUPPORTED_PLATFORMS, reason="checks the unsupported path"
-)
-def test_declines_to_run_where_there_is_no_tray(capsys) -> None:
-    assert gui.main([]) == 2
-    assert "CLI" in capsys.readouterr().err

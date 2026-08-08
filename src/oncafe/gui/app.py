@@ -233,11 +233,38 @@ class TrayApp:
     def run(self) -> None:
         threading.Thread(target=self._tick, name="oncafe-tick", daemon=True).start()
         _use_accessory_activation_policy()
+        _release_own_console()
         try:
             self._icon.run(setup=self._on_ready)
         finally:
             self._stopping.set()
             self._controller.stop()
+
+
+def _release_own_console() -> None:
+    """Drop a console window that exists only because we were launched.
+
+    Launching from the Start menu leaves an empty terminal sitting behind the
+    tray icon for as long as the app runs. Rather than chase which layer
+    allocated it -- the shortcut, the launcher shim, or the interpreter --
+    hand it back.
+
+    Only when we are the sole process attached to it. Typing `oncafe-gui` in a
+    terminal shares that terminal with the shell, and detaching from it there
+    would be rude and confusing.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        processes = (ctypes.c_uint32 * 4)()
+        attached = kernel32.GetConsoleProcessList(processes, 4)
+        if attached == 1:
+            kernel32.FreeConsole()
+    except Exception:
+        pass
 
 
 def _ink() -> tuple[int, int, int, int]:

@@ -47,6 +47,14 @@ def main(argv: list[str] | None = None) -> int:
         print("oncafe: --startup only means something with --install", file=sys.stderr)
         return 2
 
+    from .instance import acquire
+
+    if not acquire():
+        # Not an error: the app is already there, doing its job. A second icon
+        # with its own separate hold would be the failure.
+        print("oncafe: already running — look for the cup in the menu bar")
+        return 0
+
     try:
         from .app import main as run
     except ImportError:

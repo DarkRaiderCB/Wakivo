@@ -31,6 +31,10 @@ DURATIONS: tuple[tuple[str, int], ...] = (
 # Only the countdown needs this; a hold that is open-ended never changes text.
 REFRESH_SECONDS = 30
 
+# Which menu entry is marked as running. Durations identify themselves by their
+# length, so this needs to be something no duration can equal.
+OPEN_ENDED = "open-ended"
+
 
 class TrayApp:
     def __init__(self, backend=None) -> None:
@@ -41,6 +45,7 @@ class TrayApp:
         # real power state.
         self._controller = HoldController(backend=backend, on_change=self._refresh)
         self._keep_display = False
+        self._choice: int | str | None = None
         self._error: str | None = None
         self._stopping = threading.Event()
         # What the tray is currently showing, so _refresh can skip work.
@@ -60,15 +65,32 @@ class TrayApp:
         item = self._pystray.MenuItem
         menu = self._pystray.Menu
 
+        # Marked rather than disabled. Extending a hold is a normal thing to
+        # want, and greying the other durations out would make it a two-step
+        # job -- stop, reopen, pick -- with the machine unprotected in between.
+        # So they stay live, and the mark says which one is running.
         durations = menu(
-            *(item(label, self._hold_for(seconds)) for label, seconds in DURATIONS)
+            *(
+                item(
+                    label,
+                    self._hold_for(seconds),
+                    checked=lambda _, seconds=seconds: self._choice == seconds,
+                    radio=True,
+                )
+                for label, seconds in DURATIONS
+            )
         )
 
         return menu(
             item(lambda _: self._status_text(), None, enabled=False),
             menu.SEPARATOR,
             item("Keep awake for", durations),
-            item("Keep awake until I quit", self._hold_open_ended),
+            item(
+                "Keep awake until I quit",
+                self._hold_open_ended,
+                checked=lambda _: self._choice == OPEN_ENDED,
+                radio=True,
+            ),
             item("Stop", self._stop, enabled=lambda _: self._is_active()),
             menu.SEPARATOR,
             # "Also" on purpose. This is a modifier for the next hold, not a
@@ -101,14 +123,14 @@ class TrayApp:
 
     def _hold_for(self, seconds: int):
         def action(_icon=None, _item=None) -> None:
-            self._start(TimerTrigger(seconds))
+            self._start(TimerTrigger(seconds), seconds)
 
         return action
 
     def _hold_open_ended(self, _icon=None, _item=None) -> None:
-        self._start(IndefiniteTrigger())
+        self._start(IndefiniteTrigger(), OPEN_ENDED)
 
-    def _start(self, trigger) -> None:
+    def _start(self, trigger, choice: int | str) -> None:
         # Cleared first: starting the hold notifies, and that refresh would
         # otherwise redraw the menu still showing the previous error.
         self._error = None
@@ -117,6 +139,7 @@ class TrayApp:
                 self._controller.start(
                     trigger, Wants(system=True, display=self._keep_display)
                 )
+                self._choice = choice
             except BackendError as error:
                 # Surfaced in the menu rather than a dialog: there is no window
                 # to attach one to, and a tray app that silently does nothing
@@ -134,10 +157,12 @@ class TrayApp:
         # time, which is what a checkbox implies.
         status = self._controller.status()
         if status.active:
+            # Keeps whichever entry was marked; the hold is the same one, it is
+            # only being re-taken so the display flag applies now.
             if status.remaining is not None:
-                self._start(TimerTrigger(status.remaining))
+                self._start(TimerTrigger(status.remaining), self._choice)
             else:
-                self._start(IndefiniteTrigger())
+                self._start(IndefiniteTrigger(), self._choice)
         self._refresh()
 
     def _quit(self, _icon=None, _item=None) -> None:
@@ -178,12 +203,15 @@ class TrayApp:
             return
 
         active = self._is_active()
+        if not active:
+            # Covers a timer running out on its own as well as Stop.
+            self._choice = None
         # Ink is recomputed rather than cached so a light/dark switch is picked
         # up by the next tick, without watching for theme notifications.
         ink = _ink()
         # Everything the menu renders, so a checkbox change is not missed just
         # because the status line happens to read the same.
-        shown = (active, self._status_text(), self._keep_display)
+        shown = (active, self._status_text(), self._keep_display, self._choice)
 
         try:
             if (active, ink) != self._shown_icon:

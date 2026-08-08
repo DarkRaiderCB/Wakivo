@@ -227,3 +227,25 @@ def test_the_windows_launcher_script_restores_the_import_paths(tmp_path, monkeyp
     # separators come out escaped and the raw path never appears.
     assert repr(str(Path(oncafe.__file__).resolve().parent.parent)) in source
     assert "from oncafe.gui import main" in source
+
+
+@pytest.mark.parametrize(
+    ("version", "expected"),
+    [("0.1.0a1", "0.1.0"), ("0.1.0", "0.1.0"), ("1.2.3.4", "1.2.3"), ("2.0rc1", "2.0")],
+)
+def test_the_bundle_version_is_one_apple_accepts(version, expected) -> None:
+    # CFBundleShortVersionString allows up to three dot-separated integers, so
+    # a pre-release like 0.1.0a1 cannot go in verbatim.
+    from oncafe.gui.launcher import _apple_version
+
+    assert _apple_version(version) == expected
+
+
+def test_the_version_matches_what_was_installed() -> None:
+    # It was hardcoded here once and drifted from pyproject on the first
+    # pre-release, so `oncafe --version` reported the wrong number.
+    from importlib.metadata import version as installed
+
+    import oncafe
+
+    assert oncafe.__version__ == installed("oncafe")

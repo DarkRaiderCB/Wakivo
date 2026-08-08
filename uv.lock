@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.13"
 
 [options]
-exclude-newer = "2026-07-29T12:13:44.544557Z"
+exclude-newer = "2026-07-29T17:53:03.595657Z"
 exclude-newer-span = "P10D"
 
 [[package]]
@@ -26,7 +26,7 @@ wheels = [
 
 [[package]]
 name = "oncafe"
-version = "0.1.0"
+version = "0.1.0a1"
 source = { editable = "." }
 
 [package.optional-dependencies]

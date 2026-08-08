@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import plistlib
+import re
 import shutil
 import subprocess
 import sys
@@ -183,8 +184,8 @@ def _install_macos() -> list[Path]:
                 "CFBundleExecutable": APP_NAME,
                 "CFBundleIconFile": APP_NAME,
                 "CFBundlePackageType": "APPL",
-                "CFBundleShortVersionString": __version__,
-                "CFBundleVersion": __version__,
+                "CFBundleShortVersionString": _apple_version(__version__),
+                "CFBundleVersion": _apple_version(__version__),
                 # The app lives in the menu bar, so keep it out of the Dock and
                 # the ⌘-Tab switcher.
                 "LSUIElement": True,
@@ -196,6 +197,16 @@ def _install_macos() -> list[Path]:
     _check_bundled_interpreter(executable)
     _sign(app)
     return [app]
+
+
+def _apple_version(version: str) -> str:
+    """Trim a Python version to what CFBundleShortVersionString allows.
+
+    Apple wants up to three dot-separated integers, so "0.1.0a1" is not a
+    legal value -- the leading numeric part is the closest honest answer.
+    """
+    match = re.match(r"\d+(?:\.\d+){0,2}", version)
+    return match.group(0) if match else "0"
 
 
 def _check_bundled_interpreter(executable: Path) -> None:

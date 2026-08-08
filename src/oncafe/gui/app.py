@@ -44,7 +44,7 @@ class TrayApp:
         self._error: str | None = None
         self._stopping = threading.Event()
         # What the tray is currently showing, so _refresh can skip work.
-        self._shown_active: bool | None = False
+        self._shown_icon: tuple | None = None
         self._shown: tuple | None = None
         self._batching = 0
         self._icon = pystray.Icon(
@@ -178,21 +178,25 @@ class TrayApp:
             return
 
         active = self._is_active()
+        # Ink is recomputed rather than cached so a light/dark switch is picked
+        # up by the next tick, without watching for theme notifications.
+        ink = _ink()
         # Everything the menu renders, so a checkbox change is not missed just
         # because the status line happens to read the same.
         shown = (active, self._status_text(), self._keep_display)
 
         try:
-            if active != self._shown_active:
-                self._icon.icon = artwork.render(active=active)
-                self._shown_active = active
+            if (active, ink) != self._shown_icon:
+                self._icon.icon = artwork.render(active=active, ink=ink)
+                self._mark_template_image()
+                self._shown_icon = (active, ink)
             if shown != self._shown:
                 self._shown = shown
                 self._icon.update_menu()
         except Exception:
             # A refresh failing must never take the app down, and the cache
             # must not claim a state we failed to draw.
-            self._shown_active = None
+            self._shown_icon = None
             self._shown = None
 
     def _tick(self) -> None:
@@ -200,14 +204,66 @@ class TrayApp:
             if self._controller.status().remaining is not None:
                 self._refresh()
 
+    def _mark_template_image(self) -> None:
+        """Ask macOS to recolour the icon for the menu bar it sits in.
+
+        pystray builds a plain NSImage, so the icon would render exactly as
+        drawn -- black, and invisible on a dark menu bar. Marking that image as
+        a template makes the system use only its alpha and paint it black or
+        white to match, which is what every native menu bar item does.
+
+        This reaches for a pystray private attribute, so it is guarded: if the
+        internals move, the icon is merely drawn as-is rather than broken.
+        """
+        if sys.platform != "darwin":
+            return
+        try:
+            image = getattr(self._icon, "_icon_image", None)
+            if image is not None:
+                image.setTemplate_(True)
+        except Exception:
+            pass
+
+    def _on_ready(self, icon) -> None:
+        icon.visible = True
+        # The NSImage does not exist until the icon is on screen, so this is
+        # the first moment the template flag can be set.
+        self._mark_template_image()
+
     def run(self) -> None:
         threading.Thread(target=self._tick, name="oncafe-tick", daemon=True).start()
         _use_accessory_activation_policy()
         try:
-            self._icon.run()
+            self._icon.run(setup=self._on_ready)
         finally:
             self._stopping.set()
             self._controller.stop()
+
+
+def _ink() -> tuple[int, int, int, int]:
+    """The colour to draw the icon in.
+
+    macOS always gets black, because the image is marked as a template and the
+    system recolours it. Windows has no equivalent, so the taskbar theme has to
+    be read and matched -- and it defaults to dark, hence white when unknown.
+    """
+    if sys.platform != "win32":
+        return artwork.BLACK
+    return artwork.BLACK if _windows_taskbar_is_light() else artwork.WHITE
+
+
+def _windows_taskbar_is_light() -> bool:
+    try:
+        import winreg
+
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+        ) as key:
+            value, _ = winreg.QueryValueEx(key, "SystemUsesLightTheme")
+        return bool(value)
+    except (OSError, ImportError):
+        return False
 
 
 def _humanize(seconds: float) -> str:

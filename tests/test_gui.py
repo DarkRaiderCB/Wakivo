@@ -11,6 +11,8 @@ from .test_session import FakeBackend, wait_until
 
 pystray = pytest.importorskip("pystray", reason="the GUI extra is not installed")
 
+from oncafe.gui import icon  # noqa: E402  -- needs the extra imported above
+
 needs_tray = pytest.mark.skipif(
     sys.platform not in gui.SUPPORTED_PLATFORMS,
     reason="the tray front end targets macOS and Windows",
@@ -24,6 +26,40 @@ def app():
     tray = TrayApp(backend=FakeBackend())
     yield tray
     tray._controller.stop()
+
+
+def colours(image) -> list[tuple[int, tuple[int, int, int, int]]]:
+    return image.getcolors(1 << 24) or []
+
+
+@pytest.mark.parametrize("ink", [(0, 0, 0, 255), (255, 255, 255, 255)])
+def test_the_icon_is_drawn_in_solid_ink(ink) -> None:
+    # It was mid grey once, to survive both light and dark bars, and looked
+    # washed out on each. macOS gets a template image and Windows picks a
+    # colour from the taskbar theme, so neither has to be a compromise now.
+    opaque = {rgba[:3] for _, rgba in colours(icon.render(True, ink=ink)) if rgba[3] > 200}
+    assert opaque == {ink[:3]}
+
+
+def test_the_two_icon_states_are_distinguishable() -> None:
+    def coverage(image) -> int:
+        return sum(count for count, rgba in colours(image) if rgba[3] > 128)
+
+    idle, holding = icon.render(False), icon.render(True)
+    assert idle.tobytes() != holding.tobytes()
+    # The filled cup must be the *active* one; inverted, the tray would lie.
+    assert coverage(holding) > coverage(idle)
+
+
+@needs_tray
+def test_macos_draws_black_and_lets_the_system_recolour_it() -> None:
+    from oncafe.gui.app import _ink
+    from oncafe.gui.icon import BLACK, WHITE
+
+    if sys.platform == "darwin":
+        assert _ink() == BLACK
+    else:
+        assert _ink() in (BLACK, WHITE)
 
 
 @needs_tray

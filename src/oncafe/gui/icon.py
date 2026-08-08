@@ -4,42 +4,52 @@ Generating the icon keeps binaries out of the repo and lets the two states be
 the same shape at different weights, which reads better at 22px than two
 unrelated glyphs.
 
-The colour is a mid grey on purpose. macOS template images -- which invert
-themselves for dark menu bars -- are not reachable through pystray, so the one
-colour has to stay legible against both a white and a black bar. Grey does;
-black or white would vanish on one of them.
+Colour is decided by the caller, because the two platforms solve it
+differently. macOS gets a *template* image -- solid black plus alpha, which
+the system recolours for light and dark menu bars. Windows has no such
+concept, so the app picks black or white from the taskbar theme.
 """
 
 from __future__ import annotations
 
 from PIL import Image, ImageDraw
 
-INK = (140, 140, 140, 255)
+BLACK = (0, 0, 0, 255)
+WHITE = (255, 255, 255, 255)
+
+# Rendered at 2x the usual 22px status bar and downscaled by the toolkit,
+# which supersamples the strokes rather than aliasing them.
 SIZE = 44
 
 
-def render(active: bool, size: int = SIZE) -> Image.Image:
+def render(active: bool, ink: tuple[int, int, int, int] = BLACK, size: int = SIZE) -> Image.Image:
     image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    stroke = max(2, size // 16)
+    # Heavier than looks right at 44px: it is seen at half that, where a thin
+    # stroke reads as grey rather than as a line.
+    stroke = max(2, round(size / 11))
 
     def box(x0: float, y0: float, x1: float, y1: float) -> list[float]:
         return [x0 * size, y0 * size, x1 * size, y1 * size]
 
-    # Cup body, filled when a hold is active and outlined when it is not.
-    body = box(0.18, 0.30, 0.66, 0.78)
+    # Cup body, filled when a hold is active and outlined when it is not. Kept
+    # large in the frame: at 22px a smaller body leaves the outline state with
+    # too little interior and it reads as a filled blob.
     draw.rounded_rectangle(
-        body,
+        box(0.12, 0.24, 0.62, 0.74),
         radius=size * 0.10,
-        fill=INK if active else None,
-        outline=INK,
+        fill=ink if active else None,
+        outline=ink,
         width=stroke,
     )
 
-    # Handle.
-    draw.arc(box(0.58, 0.40, 0.84, 0.66), start=-70, end=90, fill=INK, width=stroke)
+    # Handle. The sweep runs past ±90° on purpose so its ends wrap back into
+    # the body -- stopping at ±72° leaves a gap, and the handle then reads as a
+    # detached chevron rather than part of the cup.
+    draw.arc(box(0.50, 0.34, 0.86, 0.62), start=-105, end=105, fill=ink, width=stroke)
 
-    # Saucer.
-    draw.line(box(0.10, 0.88, 0.74, 0.88), fill=INK, width=stroke)
+    # Saucer. Carries most of the "cup" reading at small sizes: without it the
+    # filled state silhouettes as a rounded blob with a bump.
+    draw.line(box(0.08, 0.86, 0.66, 0.86), fill=ink, width=stroke)
 
     return image

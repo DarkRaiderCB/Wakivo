@@ -324,34 +324,58 @@ def _install_windows(startup: bool) -> list[Path]:
     return created
 
 
+_WINDOWS_LAUNCH_SOURCE = '''\
+"""Started by the OnCafe shortcut.
+
+The shortcut runs the *base* interpreter's pythonw, not the virtualenv's, so
+this puts the virtualenv's packages back on the path. See _windows_target for
+why the virtualenv's own pythonw cannot be used.
+"""
+
+import sys
+
+for _root in {roots!r}:
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+
+from oncafe.gui import main
+
+sys.exit(main())
+'''
+
+
+def _windows_launcher_path() -> Path:
+    return _ico_path().parent / "launch.pyw"
+
+
 def _windows_target() -> tuple[str, str]:
-    """Pick a launcher with no console attached, in order of preference.
+    """Pick an interpreter that will not put a console behind the tray icon.
 
-    python.exe is last because it is the one that leaves a black window
-    sitting behind the tray icon for as long as the app runs.
+    Not the virtualenv's pythonw.exe, and not the oncafe-gui shim. Under uv
+    both are trampolines: GUI-subsystem themselves, so they look right, but
+    they spawn the base *python.exe*, which is console-subsystem, and Windows
+    gives that a terminal. It stays for as long as the app runs.
+
+    Hence the real pythonw from the base installation, with the virtualenv's
+    packages handed to it through a launch script -- a shortcut cannot set
+    environment variables, so the paths cannot be passed as PYTHONPATH.
     """
-    # Declared under [project.gui-scripts], so the generated exe should be the
-    # windowless variant -- but only if it was generated *after* that move. An
-    # environment installed before it still holds a console shim, and pointing
-    # a shortcut at that puts a black window behind the tray icon. Ask the
-    # binary rather than trusting the declaration.
-    shim = Path(sys.executable).with_name("oncafe-gui.exe")
-    on_path = shutil.which("oncafe-gui")
-    for candidate in (shim, Path(on_path) if on_path else None):
-        if candidate and candidate.exists() and _is_windowless(candidate):
-            return str(candidate), ""
+    launcher = _windows_launcher_path()
+    launcher.parent.mkdir(parents=True, exist_ok=True)
+    launcher.write_text(_WINDOWS_LAUNCH_SOURCE.format(roots=_import_roots()))
+    arguments = f'"{launcher}"'
 
-    # Otherwise pythonw, wherever this interpreter keeps it: beside the
-    # executable in a virtualenv, at the prefix root for a base install.
     for candidate in (
-        Path(sys.executable).with_name("pythonw.exe"),
         Path(sys.base_prefix) / "pythonw.exe",
         Path(sys.base_exec_prefix) / "pythonw.exe",
+        # Last resort. In a uv environment this is the trampoline described
+        # above, so it is better than nothing and worse than the two above it.
+        Path(sys.executable).with_name("pythonw.exe"),
     ):
-        if candidate.exists():
-            return str(candidate), "-m oncafe.gui"
+        if candidate.exists() and _is_windowless(candidate):
+            return str(candidate), arguments
 
-    return str(sys.executable), "-m oncafe.gui"
+    return str(sys.executable), arguments
 
 
 _IMAGE_SUBSYSTEM_WINDOWS_GUI = 2

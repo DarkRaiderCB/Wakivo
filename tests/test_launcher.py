@@ -212,27 +212,46 @@ def test_a_console_shim_is_not_treated_as_windowless(tmp_path) -> None:
     assert not _is_windowless(tmp_path / "missing.exe")
 
 
-def test_windows_target_avoids_a_console_window(tmp_path, monkeypatch) -> None:
-    # The whole point of the shortcut is launching without a terminal; a
-    # console window sitting behind the tray icon defeats it.
+def test_windows_target_avoids_the_uv_trampolines(tmp_path, monkeypatch) -> None:
+    # Under uv both the virtualenv's pythonw.exe and the oncafe-gui shim are
+    # trampolines: GUI-subsystem themselves, so they look correct, but they
+    # spawn the base console python.exe and Windows gives that a terminal that
+    # sits behind the tray icon for as long as the app runs.
     from oncafe.gui import launcher
 
-    monkeypatch.setattr(launcher.shutil, "which", lambda _name: None)
-    monkeypatch.setattr(sys, "executable", str(tmp_path / "python.exe"))
+    base, venv = tmp_path / "base", tmp_path / "venv"
+    base.mkdir()
+    venv.mkdir()
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    monkeypatch.setattr(sys, "executable", str(venv / "python.exe"))
+    monkeypatch.setattr(sys, "base_prefix", str(base))
+    monkeypatch.setattr(sys, "base_exec_prefix", str(base))
+
+    # A trampoline beside the executable is passed over ...
+    write_pe(venv / "pythonw.exe", 2)
+    write_pe(venv / "oncafe-gui.exe", 2)
+    write_pe(base / "pythonw.exe", 2)
+
+    target, arguments = launcher._windows_target()
+    assert target == str(base / "pythonw.exe")
+    assert "oncafe-gui.exe" not in target
+    # ... and the packages travel as a script argument, because a shortcut
+    # cannot set PYTHONPATH.
+    assert arguments.strip('"').endswith("launch.pyw")
+
+
+def test_the_windows_launcher_script_restores_the_import_paths(tmp_path, monkeypatch) -> None:
+    # The shortcut runs the base interpreter, which has none of the
+    # virtualenv's packages on its path.
+    from oncafe.gui import launcher
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     monkeypatch.setattr(sys, "base_prefix", str(tmp_path))
     monkeypatch.setattr(sys, "base_exec_prefix", str(tmp_path))
+    launcher._windows_target()
 
-    # Nothing better available: falls back, with arguments.
-    assert launcher._windows_target() == (str(tmp_path / "python.exe"), "-m oncafe.gui")
+    import oncafe
 
-    (tmp_path / "pythonw.exe").touch()
-    assert launcher._windows_target() == (str(tmp_path / "pythonw.exe"), "-m oncafe.gui")
-
-    # A shim left over from before the entry point moved to gui-scripts is a
-    # console binary, and must be passed over rather than trusted by name.
-    write_pe(tmp_path / "oncafe-gui.exe", 3)
-    assert launcher._windows_target() == (str(tmp_path / "pythonw.exe"), "-m oncafe.gui")
-
-    # A genuine gui-scripts shim wins outright, and needs no arguments.
-    write_pe(tmp_path / "oncafe-gui.exe", 2)
-    assert launcher._windows_target() == (str(tmp_path / "oncafe-gui.exe"), "")
+    source = launcher._windows_launcher_path().read_text()
+    assert str(Path(oncafe.__file__).resolve().parent.parent) in source
+    assert "from oncafe.gui import main" in source

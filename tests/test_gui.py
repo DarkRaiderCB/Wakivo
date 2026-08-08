@@ -21,10 +21,12 @@ from oncafe.gui import icon  # noqa: E402  -- needs the extra imported above
 from oncafe.gui.app import DURATIONS  # noqa: E402
 
 @pytest.fixture
-def app():
+def app(request):
     from oncafe.gui.app import TrayApp
 
-    tray = TrayApp(backend=FakeBackend())
+    # A distinct name per test: see the note in TrayApp.__init__ about window
+    # class collisions on Windows.
+    tray = TrayApp(backend=FakeBackend(), name=f"oncafe-{request.node.name}")
     yield tray
     tray._controller.stop()
 

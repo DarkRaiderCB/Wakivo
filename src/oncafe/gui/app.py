@@ -37,7 +37,7 @@ OPEN_ENDED = "open-ended"
 
 
 class TrayApp:
-    def __init__(self, backend=None) -> None:
+    def __init__(self, backend=None, name: str = "oncafe") -> None:
         import pystray
 
         self._pystray = pystray
@@ -52,8 +52,12 @@ class TrayApp:
         self._shown_icon: tuple | None = None
         self._shown: tuple | None = None
         self._batching = 0
+        # pystray's win32 backend derives a window class name from this plus
+        # the object's address, and an Icon that never runs never unregisters
+        # it. Two Icons in one process can then collide, so the name is
+        # settable -- tests make one per case.
         self._icon = pystray.Icon(
-            "oncafe",
+            name,
             artwork.render(active=False),
             "oncafe",
             menu=self._build_menu(),

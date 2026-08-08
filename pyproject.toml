@@ -8,6 +8,13 @@ dependencies = []
 
 [project.scripts]
 oncafe = "oncafe.cli:main"
+oncafe-gui = "oncafe.gui:main"
+
+[project.optional-dependencies]
+gui = [
+    "pillow>=12.3.0",
+    "pystray>=0.19.5",
+]
 
 [build-system]
 requires = ["hatchling"]

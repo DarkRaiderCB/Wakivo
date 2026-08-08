@@ -89,6 +89,9 @@ class PidTrigger:
         self._stop = threading.Event()
 
     def wait(self) -> int:
-        while is_alive(self.pid):
+        while is_alive(self.pid) and not self._stop.is_set():
             self._stop.wait(_POLL_SECONDS)
         return 0
+
+    def cancel(self) -> None:
+        self._stop.set()

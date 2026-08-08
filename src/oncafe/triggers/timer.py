@@ -51,6 +51,9 @@ class TimerTrigger:
         self._stop.wait(self.seconds)
         return 0
 
+    def cancel(self) -> None:
+        self._stop.set()
+
 
 class IndefiniteTrigger:
     """Hold the wakelock until interrupted."""
@@ -66,3 +69,6 @@ class IndefiniteTrigger:
         while not self._stop.wait(0.5):
             pass
         return 0
+
+    def cancel(self) -> None:
+        self._stop.set()

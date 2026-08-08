@@ -31,8 +31,11 @@ jobs:
       # exclude-newer is written into uv.lock, and CI has no such config, so
       # --locked turns any contributor's uv settings into a CI failure. The
       # only dependency here is pytest; that is not worth the papercut.
+      # --all-extras so the tray front end is exercised too. Without it the
+      # GUI tests importorskip themselves and the job goes green having
+      # tested nothing.
       - name: Install project
-        run: uv sync
+        run: uv sync --all-extras
 
       # CI cannot prove the machine stays awake -- no runner ever idles into
       # sleep. What it does prove is that the platform accepts our calls and

@@ -18,10 +18,59 @@ oncafe                        # stay awake until Ctrl-C
 ## Install
 
 ```sh
-uv tool install oncafe    # or: pipx install oncafe
+uv tool install oncafe            # the CLI
+uv tool install "oncafe[gui]"     # and the menu bar app
 ```
 
-Requires Python 3.13+.
+`pipx install` works the same way. Requires Python 3.13+.
+
+## Menu bar app
+
+`oncafe-gui` puts a cup in the menu bar (macOS) or notification area
+(Windows), for when you would rather not open a terminal.
+
+```
+● Awake — 1h 30m left
+──────────────────────
+Keep awake for      ▸   15m · 30m · 1h · 2h · 4h
+Keep awake until I quit
+Stop
+──────────────────────
+☑ Also keep the display on
+Quit
+```
+
+Two modes, on purpose. Binding a hold to a particular process means knowing
+which process, and anyone who does is already served by `oncafe --pid` — so
+the GUI has no picker to misunderstand. The icon is filled while a hold is
+active and outlined when it is not, so "is it on?" needs no click.
+
+### Launching it without a terminal
+
+```sh
+oncafe-gui --install              # then launch it like any other app
+oncafe-gui --install --startup    # and start it at login
+oncafe-gui --uninstall
+```
+
+On macOS this writes `~/Applications/OnCafe.app`; on Windows, a Start menu
+shortcut. Run it once and you never need a shell again.
+
+No code signing is involved, because the launcher is built **on your machine**
+rather than downloaded. Gatekeeper and SmartScreen act on the quarantine
+attribute, which is applied by whatever fetched a file from elsewhere — a
+bundle your own computer just wrote never carries one. Nothing here embeds a
+Python runtime either; the launcher simply starts the interpreter you already
+have.
+
+Starting at login is deliberately separate and off by default. A tool that
+adds itself to your login items uninvited deserves to be uninstalled, and for
+this one "always running" is not obviously right — a hold you have forgotten
+about is exactly the failure the design tries to avoid.
+
+**macOS and Windows only.** Linux keeps the CLI: GNOME removed system tray
+support years ago, so a tray icon needs a shell extension the user has to
+install first. `oncafe-gui` says so and exits rather than half-working.
 
 ## Options
 
@@ -78,6 +127,9 @@ Two independent axes:
   GNOME's own session inhibitor when running inside a GNOME session.
 - **`triggers/`** — *when* the hold is released: a command exiting, a pid dying,
   a timer, or an interrupt.
+- **`session.py`** — a hold that can be started and stopped rather than waited
+  out. The CLI runs to completion; the menu bar app needs to acquire and
+  return, then release later. Both drive the same backends and triggers.
 
 Any trigger composes with any backend, so a new release condition is a new file
 rather than a change to the wakelock code.

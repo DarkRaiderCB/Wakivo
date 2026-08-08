@@ -28,3 +28,12 @@ class Trigger(Protocol):
     def wait(self) -> int:
         """Block until the hold should end, and return an exit code."""
         ...
+
+    def cancel(self) -> None:
+        """Ask `wait` to return early. Safe to call from another thread.
+
+        The CLI never needs this -- it waits until the trigger fires and then
+        exits. A tray app does: "Stop" has to end a hold that would otherwise
+        run for hours.
+        """
+        ...

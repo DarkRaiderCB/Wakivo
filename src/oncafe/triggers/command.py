@@ -15,6 +15,15 @@ class CommandTrigger:
         self.argv = argv
         self.description = f"until `{shlex.join(argv)}` exits"
 
+    def cancel(self) -> None:
+        """Not supported, deliberately.
+
+        This hold is defined as "for as long as the command runs". Ending it
+        early would either abandon the command unprotected or kill the user's
+        job, and neither is something a Stop button should do quietly. The
+        tray app never offers command holds, so nothing calls this.
+        """
+
     def wait(self) -> int:
         try:
             process = subprocess.Popen(self.argv)

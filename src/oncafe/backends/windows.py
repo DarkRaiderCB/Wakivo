@@ -38,6 +38,15 @@ class WindowsBackend:
         if wants.display:
             flags |= ES_DISPLAY_REQUIRED
 
+        # Fresh events per acquire. Reusing them means a second acquire finds
+        # _stop already set from the previous release, so the holding thread
+        # clears the state and exits immediately -- a hold that silently is
+        # not one. The CLI acquires once and exits; a tray app does this
+        # repeatedly.
+        self._stop = threading.Event()
+        self._settled = threading.Event()
+        self._error = None
+
         self._thread = threading.Thread(
             target=self._hold,
             args=(flags,),

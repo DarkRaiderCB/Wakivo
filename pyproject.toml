@@ -9,6 +9,17 @@ dependencies = []
 [project.scripts]
 oncafe = "oncafe.cli:main"
 
+[project.gui-scripts]
+# A GUI script, so Windows uses a pythonw launcher and no console window
+# flashes up behind the tray icon.
+oncafe-gui = "oncafe.gui:main"
+
+[project.optional-dependencies]
+gui = [
+    "pillow>=12.3.0",
+    "pystray>=0.19.5",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

@@ -185,3 +185,24 @@ def test_the_app_icon_has_its_own_ground() -> None:
     # must not be transparent behind the cup.
     assert image.getpixel((64, 120))[3] == 255
     assert image.getpixel((6, 64))[:3] in (APP_GROUND[:3], (0, 0, 0))
+
+
+def test_windows_target_avoids_a_console_window(tmp_path, monkeypatch) -> None:
+    # The whole point of the shortcut is launching without a terminal; a
+    # console window sitting behind the tray icon defeats it.
+    from oncafe.gui import launcher
+
+    monkeypatch.setattr(launcher.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "python.exe"))
+    monkeypatch.setattr(sys, "base_prefix", str(tmp_path))
+    monkeypatch.setattr(sys, "base_exec_prefix", str(tmp_path))
+
+    # Nothing better available: falls back, with arguments.
+    assert launcher._windows_target() == (str(tmp_path / "python.exe"), "-m oncafe.gui")
+
+    (tmp_path / "pythonw.exe").touch()
+    assert launcher._windows_target() == (str(tmp_path / "pythonw.exe"), "-m oncafe.gui")
+
+    # The gui-scripts shim wins outright, and needs no arguments.
+    (tmp_path / "oncafe-gui.exe").touch()
+    assert launcher._windows_target() == (str(tmp_path / "oncafe-gui.exe"), "")

@@ -325,10 +325,31 @@ def _install_windows(startup: bool) -> list[Path]:
 
 
 def _windows_target() -> tuple[str, str]:
-    """Prefer pythonw, so launching never flashes a console window."""
-    pythonw = Path(sys.executable).with_name("pythonw.exe")
-    interpreter = pythonw if pythonw.exists() else Path(sys.executable)
-    return str(interpreter), "-m oncafe.gui"
+    """Pick a launcher with no console attached, in order of preference.
+
+    python.exe is last because it is the one that leaves a black window
+    sitting behind the tray icon for as long as the app runs.
+    """
+    # Declared under [project.gui-scripts], so the generated exe is the
+    # windowless variant -- the best target when it is present.
+    shim = Path(sys.executable).with_name("oncafe-gui.exe")
+    if shim.exists():
+        return str(shim), ""
+    on_path = shutil.which("oncafe-gui")
+    if on_path:
+        return on_path, ""
+
+    # Otherwise pythonw, wherever this interpreter keeps it: beside the
+    # executable in a virtualenv, at the prefix root for a base install.
+    for candidate in (
+        Path(sys.executable).with_name("pythonw.exe"),
+        Path(sys.base_prefix) / "pythonw.exe",
+        Path(sys.base_exec_prefix) / "pythonw.exe",
+    ):
+        if candidate.exists():
+            return str(candidate), "-m oncafe.gui"
+
+    return str(sys.executable), "-m oncafe.gui"
 
 
 def _create_shortcut(path: Path, target: str, arguments: str, ico: Path) -> None:

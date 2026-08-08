@@ -34,12 +34,12 @@ class LauncherError(RuntimeError):
     pass
 
 
-def install(startup: bool = False) -> list[Path]:
+def install() -> list[Path]:
     """Create the launcher. Returns the paths written."""
     if sys.platform == "darwin":
-        return _install_macos(startup)
+        return _install_macos()
     if sys.platform == "win32":
-        return _install_windows(startup)
+        return _install_windows()
     raise LauncherError(f"no launcher for {sys.platform!r}")
 
 
@@ -54,9 +54,6 @@ def uninstall() -> list[Path]:
         else:
             path.unlink()
         removed.append(path)
-
-    if sys.platform == "darwin":
-        _launchctl("bootout", _launch_agent_path())
     return removed
 
 
@@ -65,10 +62,6 @@ def uninstall() -> list[Path]:
 
 def _app_path() -> Path:
     return Path.home() / "Applications" / f"{APP_NAME}.app"
-
-
-def _launch_agent_path() -> Path:
-    return Path.home() / "Library" / "LaunchAgents" / f"{BUNDLE_ID}.plist"
 
 
 def _import_roots() -> list[str]:
@@ -122,7 +115,7 @@ os._exit(_code if isinstance(_code, int) else 0)
 '''
 
 
-def _install_macos(startup: bool) -> list[Path]:
+def _install_macos() -> list[Path]:
     """Build the bundle.
 
     Three constraints, each found the hard way, and together they leave very
@@ -202,11 +195,7 @@ def _install_macos(startup: bool) -> list[Path]:
 
     _check_bundled_interpreter(executable)
     _sign(app)
-
-    created = [app]
-    if startup:
-        created.append(_install_launch_agent())
-    return created
+    return [app]
 
 
 def _check_bundled_interpreter(executable: Path) -> None:
@@ -252,41 +241,6 @@ def _sign(app: Path) -> None:
         pass
 
 
-def _install_launch_agent() -> Path:
-    path = _launch_agent_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(
-        plistlib.dumps(
-            {
-                "Label": BUNDLE_ID,
-                # Launch the bundle rather than the interpreter, so login gets
-                # the same registered-with-LaunchServices process that a
-                # double-click does. Started any other way, the status item
-                # never receives a slot in the menu bar.
-                "ProgramArguments": ["/usr/bin/open", "-a", str(_app_path())],
-                "RunAtLoad": True,
-            }
-        )
-    )
-    # Best effort: if launchd will not take it now, it is picked up at the next
-    # login anyway, which is when it matters.
-    _launchctl("bootout", path)
-    _launchctl("bootstrap", path)
-    return path
-
-
-def _launchctl(verb: str, path: Path) -> None:
-    domain = f"gui/{os.getuid()}"
-    target = str(path) if verb == "bootstrap" else f"{domain}/{BUNDLE_ID}"
-    args = [domain, target] if verb == "bootstrap" else [target]
-    try:
-        subprocess.run(
-            ["launchctl", verb, *args], capture_output=True, check=False, timeout=10
-        )
-    except (OSError, subprocess.SubprocessError):
-        pass
-
-
 # -- Windows -----------------------------------------------------------------
 
 
@@ -300,28 +254,21 @@ def _shortcut_path() -> Path:
     return _programs_dir() / f"{APP_NAME}.lnk"
 
 
-def _startup_shortcut_path() -> Path:
-    return _programs_dir() / "Startup" / f"{APP_NAME}.lnk"
-
-
 def _ico_path() -> Path:
     root = os.environ.get("LOCALAPPDATA") or str(Path.home())
     return Path(root) / "oncafe" / f"{APP_NAME}.ico"
 
 
-def _install_windows(startup: bool) -> list[Path]:
+def _install_windows() -> list[Path]:
     ico = _ico_path()
     ico.parent.mkdir(parents=True, exist_ok=True)
     artwork.render_app(256).save(ico, format="ICO", sizes=ICO_SIZES)
 
     target, arguments = _windows_target()
-    created = []
-    paths = [_shortcut_path()] + ([_startup_shortcut_path()] if startup else [])
-    for path in paths:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        _create_shortcut(path, target, arguments, ico)
-        created.append(path)
-    return created
+    path = _shortcut_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _create_shortcut(path, target, arguments, ico)
+    return [path]
 
 
 _WINDOWS_LAUNCH_SOURCE = '''\
@@ -438,7 +385,7 @@ def _quote_ps(value: str) -> str:
 
 def _installed_paths() -> list[Path]:
     if sys.platform == "darwin":
-        return [_app_path(), _launch_agent_path()]
+        return [_app_path()]
     if sys.platform == "win32":
-        return [_shortcut_path(), _startup_shortcut_path(), _ico_path().parent]
+        return [_shortcut_path(), _ico_path().parent]
     return []

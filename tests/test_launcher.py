@@ -22,9 +22,6 @@ def home(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
     monkeypatch.setenv("APPDATA", str(tmp_path / "AppData" / "Roaming"))
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "AppData" / "Local"))
-    # Never talk to the real launchd: bootstrapping a plist from tmp_path
-    # would register a login item on the machine running the tests.
-    monkeypatch.setattr("oncafe.gui.launcher._launchctl", lambda *a, **k: None)
     return tmp_path
 
 
@@ -132,34 +129,14 @@ def test_the_boot_module_records_where_to_import_from(home) -> None:
 
 
 @macos_only
-def test_startup_is_opt_in(home) -> None:
-    from oncafe.gui.launcher import _launch_agent_path, install
+def test_uninstall_removes_everything_it_made(home) -> None:
+    from oncafe.gui.launcher import install, uninstall
 
     install()
-    assert not _launch_agent_path().exists()
-
-    created = install(startup=True)
-    agent = _launch_agent_path()
-    assert agent in created
-
-    plist = plistlib.loads(agent.read_bytes())
-    assert plist["RunAtLoad"] is True
-    # Launches the bundle, not the interpreter: started any other way the
-    # status item never receives a slot in the menu bar.
-    assert plist["ProgramArguments"][:2] == ["/usr/bin/open", "-a"]
-    assert plist["ProgramArguments"][2].endswith("OnCafe.app")
-
-
-@macos_only
-def test_uninstall_removes_everything_it_made(home) -> None:
-    from oncafe.gui.launcher import _launch_agent_path, install, uninstall
-
-    install(startup=True)
     removed = uninstall()
 
     assert removed
     assert not (home / "Applications" / "OnCafe.app").exists()
-    assert not _launch_agent_path().exists()
     # And it is idempotent, so a second run is not an error.
     assert uninstall() == []
 
@@ -168,13 +145,6 @@ def test_uninstall_is_quiet_when_nothing_is_installed(home) -> None:
     from oncafe.gui.launcher import uninstall
 
     assert uninstall() == []
-
-
-def test_startup_alone_is_rejected(capsys) -> None:
-    # It only means something alongside --install; silently ignoring it would
-    # leave someone believing they had set up autostart.
-    assert gui.main(["--startup"]) == 2
-    assert "--install" in capsys.readouterr().err
 
 
 def test_the_app_icon_has_its_own_ground() -> None:

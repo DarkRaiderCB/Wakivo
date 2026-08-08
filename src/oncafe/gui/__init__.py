@@ -19,14 +19,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="create a double-clickable launcher, so this needs no terminal",
     )
     parser.add_argument(
-        "--startup",
-        action="store_true",
-        help="with --install, also start it at login",
-    )
-    parser.add_argument(
         "--uninstall",
         action="store_true",
-        help="remove the launcher, including the login item",
+        help="remove the launcher",
     )
     return parser
 
@@ -42,10 +37,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.install or args.uninstall:
         return _manage(args)
-
-    if args.startup:
-        print("oncafe: --startup only means something with --install", file=sys.stderr)
-        return 2
 
     from .instance import acquire
 
@@ -80,10 +71,8 @@ def _manage(args: argparse.Namespace) -> int:
                 print("nothing to remove")
             return 0
 
-        for path in install(startup=args.startup):
+        for path in install():
             print(f"created {path}")
-        if args.startup:
-            print("it will also start at login")
     except (LauncherError, OSError) as error:
         print(f"oncafe: {error}", file=sys.stderr)
         return 1

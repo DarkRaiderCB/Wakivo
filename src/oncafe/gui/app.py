@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import sys
 import threading
+from contextlib import contextmanager
 
 from ..backends import BackendError, Wants
 from ..session import HoldController
@@ -42,6 +43,10 @@ class TrayApp:
         self._keep_display = False
         self._error: str | None = None
         self._stopping = threading.Event()
+        # What the tray is currently showing, so _refresh can skip work.
+        self._shown_active: bool | None = False
+        self._shown: tuple | None = None
+        self._batching = 0
         self._icon = pystray.Icon(
             "oncafe",
             artwork.render(active=False),
@@ -100,22 +105,24 @@ class TrayApp:
         self._start(IndefiniteTrigger())
 
     def _start(self, trigger) -> None:
-        try:
-            self._controller.start(
-                trigger, Wants(system=True, display=self._keep_display)
-            )
-            self._error = None
-        except BackendError as error:
-            # Surfaced in the menu rather than a dialog: there is no window to
-            # attach one to, and a tray app that silently does nothing is the
-            # worst outcome.
-            self._error = f"Failed: {error}"
-        self._refresh()
+        # Cleared first: starting the hold notifies, and that refresh would
+        # otherwise redraw the menu still showing the previous error.
+        self._error = None
+        with self._batched():
+            try:
+                self._controller.start(
+                    trigger, Wants(system=True, display=self._keep_display)
+                )
+            except BackendError as error:
+                # Surfaced in the menu rather than a dialog: there is no window
+                # to attach one to, and a tray app that silently does nothing
+                # is the worst outcome.
+                self._error = f"Failed: {error}"
 
     def _stop(self, _icon=None, _item=None) -> None:
-        self._controller.stop()
         self._error = None
-        self._refresh()
+        with self._batched():
+            self._controller.stop()
 
     def _toggle_display(self, _icon=None, _item=None) -> None:
         self._keep_display = not self._keep_display
@@ -135,14 +142,54 @@ class TrayApp:
 
     # -- plumbing -----------------------------------------------------------
 
-    def _refresh(self) -> None:
+    @contextmanager
+    def _batched(self):
+        """Collapse the redraws of a multi-step action into one.
+
+        Replacing a hold goes active → idle → active, because the controller
+        releases the old one before taking the new. Drawing each step blinks
+        the icon and rebuilds the menu three times for what the user
+        experiences as a single click.
+        """
+        self._batching += 1
         try:
-            self._icon.icon = artwork.render(active=self._is_active())
-            self._icon.update_menu()
+            yield
+        finally:
+            self._batching -= 1
+        self._refresh()
+
+    def _refresh(self) -> None:
+        """Push state to the tray, but only what actually changed.
+
+        Both of these are expensive in a way nothing else here is: rebuilding
+        the NSMenu and the NSImage happens inside the toolkit, on the UI
+        thread, and it is what makes a click feel slow. Everything on our side
+        of the line is microseconds.
+
+        Being a no-op when nothing changed also means callers need not reason
+        about whether the controller already notified -- calling this twice
+        costs nothing.
+        """
+        if self._batching:
+            return
+
+        active = self._is_active()
+        # Everything the menu renders, so a checkbox change is not missed just
+        # because the status line happens to read the same.
+        shown = (active, self._status_text(), self._keep_display)
+
+        try:
+            if active != self._shown_active:
+                self._icon.icon = artwork.render(active=active)
+                self._shown_active = active
+            if shown != self._shown:
+                self._shown = shown
+                self._icon.update_menu()
         except Exception:
-            # A refresh failing must never take the app down; the next tick
-            # will try again.
-            pass
+            # A refresh failing must never take the app down, and the cache
+            # must not claim a state we failed to draw.
+            self._shown_active = None
+            self._shown = None
 
     def _tick(self) -> None:
         while not self._stopping.wait(REFRESH_SECONDS):

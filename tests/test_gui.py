@@ -18,12 +18,15 @@ if sys.platform not in gui.SUPPORTED_PLATFORMS:
 pystray = pytest.importorskip("pystray", reason="the GUI extra is not installed")
 
 from oncafe.gui import icon  # noqa: E402  -- needs the extra imported above
+from oncafe.gui.app import DURATIONS  # noqa: E402
 
 @pytest.fixture
-def app():
+def app(request):
     from oncafe.gui.app import TrayApp
 
-    tray = TrayApp(backend=FakeBackend())
+    # A distinct name per test: see the note in TrayApp.__init__ about window
+    # class collisions on Windows.
+    tray = TrayApp(backend=FakeBackend(), name=f"oncafe-{request.node.name}")
     yield tray
     tray._controller.stop()
 
@@ -155,3 +158,64 @@ def test_quit_releases_the_hold(app) -> None:
     app._icon.stop = lambda: None
     app._quit()
     assert not backend.held
+
+
+def marks(app) -> dict[str, bool]:
+    """Which mutually-exclusive entries currently show as selected."""
+
+    def walk(entries) -> dict[str, bool]:
+        found: dict[str, bool] = {}
+        for entry in entries:
+            if entry.submenu is not None:
+                found.update(walk(entry.submenu))
+            elif entry.radio:
+                found[str(entry).splitlines()[0]] = bool(entry.checked)
+        return found
+
+    return walk(list(app._build_menu()))
+
+
+def test_nothing_is_marked_while_idle(app) -> None:
+    assert not any(marks(app).values())
+
+
+def test_the_running_duration_is_marked(app) -> None:
+    app._hold_for(60 * 60)()
+    assert marks(app)["1 hour"]
+    assert not marks(app)["2 hours"]
+    assert not marks(app)["Keep awake until I quit"]
+
+
+def test_the_mark_moves_when_the_duration_changes(app) -> None:
+    app._hold_for(60 * 60)()
+    app._hold_for(2 * 60 * 60)()
+
+    current = marks(app)
+    assert current["2 hours"]
+    assert not current["1 hour"]
+
+
+def test_an_open_ended_hold_marks_its_own_entry(app) -> None:
+    app._hold_open_ended()
+    current = marks(app)
+    assert current["Keep awake until I quit"]
+    assert not any(current[label] for label, _ in DURATIONS)
+
+
+def test_stopping_clears_the_mark(app) -> None:
+    app._hold_for(900)()
+    app._stop()
+    assert not any(marks(app).values())
+
+
+def test_an_expired_hold_clears_the_mark(app) -> None:
+    app._hold_for(1)()
+    app._controller._trigger.cancel()
+    assert wait_until(lambda: not any(marks(app).values()))
+
+
+def test_toggling_the_display_keeps_the_mark(app) -> None:
+    # It re-takes the same hold, so the marked entry must not move.
+    app._hold_for(2 * 60 * 60)()
+    app._toggle_display()
+    assert marks(app)["2 hours"]

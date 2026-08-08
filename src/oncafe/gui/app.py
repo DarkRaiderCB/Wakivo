@@ -71,8 +71,12 @@ class TrayApp:
             item("Keep awake until I quit", self._hold_open_ended),
             item("Stop", self._stop, enabled=lambda _: self._is_active()),
             menu.SEPARATOR,
+            # "Also" on purpose. This is a modifier for the next hold, not a
+            # live state: ticking it while idle changes nothing until a hold
+            # starts, and a bare "Keep display on ☑" sitting above a sleeping
+            # screen reads as a lie.
             item(
-                "Keep display on",
+                "Also keep the display on",
                 self._toggle_display,
                 checked=lambda _: self._keep_display,
             ),

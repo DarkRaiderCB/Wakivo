@@ -75,6 +75,15 @@ def test_picking_a_duration_replaces_a_running_hold(app) -> None:
 
 
 @needs_tray
+def test_the_display_option_reads_as_a_modifier(app) -> None:
+    # It changes nothing until a hold starts, so the label must not present
+    # itself as a live state.
+    labels = [str(entry).splitlines()[0] for entry in app._build_menu()]
+    display = next(label for label in labels if "display" in label.lower())
+    assert display.lower().startswith("also")
+
+
+@needs_tray
 def test_keep_display_applies_to_the_hold_already_running(app) -> None:
     backend = app._controller._backend
 

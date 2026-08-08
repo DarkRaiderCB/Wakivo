@@ -36,7 +36,7 @@ Keep awake for      ▸   15m · 30m · 1h · 2h · 4h
 Keep awake until I quit
 Stop
 ──────────────────────
-☑ Keep display on
+☑ Also keep the display on
 Quit
 ```
 

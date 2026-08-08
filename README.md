@@ -48,8 +48,7 @@ active and outlined when it is not, so "is it on?" needs no click.
 ### Launching it without a terminal
 
 ```sh
-oncafe-gui --install              # then launch it like any other app
-oncafe-gui --install --startup    # and start it at login
+oncafe-gui --install       # then launch it like any other app
 oncafe-gui --uninstall
 ```
 
@@ -62,11 +61,6 @@ attribute, which is applied by whatever fetched a file from elsewhere — a
 bundle your own computer just wrote never carries one. Nothing here embeds a
 Python runtime either; the launcher simply starts the interpreter you already
 have.
-
-Starting at login is deliberately separate and off by default. A tool that
-adds itself to your login items uninvited deserves to be uninstalled, and for
-this one "always running" is not obviously right — a hold you have forgotten
-about is exactly the failure the design tries to avoid.
 
 **macOS and Windows only.** Linux keeps the CLI: GNOME removed system tray
 support years ago, so a tray icon needs a shell extension the user has to

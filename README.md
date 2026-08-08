@@ -45,6 +45,29 @@ which process, and anyone who does is already served by `oncafe --pid` — so
 the GUI has no picker to misunderstand. The icon is filled while a hold is
 active and outlined when it is not, so "is it on?" needs no click.
 
+### Launching it without a terminal
+
+```sh
+oncafe-gui --install              # then launch it like any other app
+oncafe-gui --install --startup    # and start it at login
+oncafe-gui --uninstall
+```
+
+On macOS this writes `~/Applications/OnCafe.app`; on Windows, a Start menu
+shortcut. Run it once and you never need a shell again.
+
+No code signing is involved, because the launcher is built **on your machine**
+rather than downloaded. Gatekeeper and SmartScreen act on the quarantine
+attribute, which is applied by whatever fetched a file from elsewhere — a
+bundle your own computer just wrote never carries one. Nothing here embeds a
+Python runtime either; the launcher simply starts the interpreter you already
+have.
+
+Starting at login is deliberately separate and off by default. A tool that
+adds itself to your login items uninvited deserves to be uninstalled, and for
+this one "always running" is not obviously right — a hold you have forgotten
+about is exactly the failure the design tries to avoid.
+
 **macOS and Windows only.** Linux keeps the CLI: GNOME removed system tray
 support years ago, so a tray icon needs a shell extension the user has to
 install first. `oncafe-gui` says so and exits rather than half-working.

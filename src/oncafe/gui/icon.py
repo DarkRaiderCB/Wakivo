@@ -17,6 +17,12 @@ from PIL import Image, ImageDraw
 BLACK = (0, 0, 0, 255)
 WHITE = (255, 255, 255, 255)
 
+# The launcher icon is a different problem from the menu bar one: it sits on
+# whatever wallpaper the user has, so it needs its own ground rather than
+# borrowing the bar's.
+APP_GROUND = (61, 39, 30, 255)
+APP_INK = (245, 240, 232, 255)
+
 # Rendered at 2x the usual 22px status bar and downscaled by the toolkit,
 # which supersamples the strokes rather than aliasing them.
 SIZE = 44
@@ -52,4 +58,18 @@ def render(active: bool, ink: tuple[int, int, int, int] = BLACK, size: int = SIZ
     # filled state silhouettes as a rounded blob with a bump.
     draw.line(box(0.08, 0.86, 0.66, 0.86), fill=ink, width=stroke)
 
+    return image
+
+
+def render_app(size: int = 512) -> Image.Image:
+    """The Dock / Start menu icon: the same cup on its own rounded ground."""
+    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    ImageDraw.Draw(image).rounded_rectangle(
+        [0, 0, size - 1, size - 1], radius=size * 0.22, fill=APP_GROUND
+    )
+
+    # Outlined rather than filled: a launcher icon should not imply that a
+    # hold is currently active.
+    cup = render(active=False, ink=APP_INK, size=int(size * 0.72))
+    image.alpha_composite(cup, ((size - cup.width) // 2, (size - cup.height) // 2))
     return image

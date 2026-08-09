@@ -5,8 +5,8 @@ import sys
 
 import pytest
 
-from oncafe.cli import build_parser, choose_trigger, main, split_command
-from oncafe.triggers import (
+from wakivo.cli import build_parser, choose_trigger, main, split_command
+from wakivo.triggers import (
     CommandTrigger,
     IndefiniteTrigger,
     PidTrigger,
@@ -37,7 +37,7 @@ def test_splits_at_the_first_bare_separator(
 
 
 def test_flags_after_the_separator_belong_to_the_command() -> None:
-    # `-d` here is the wrapped command's flag, not oncafe's.
+    # `-d` here is the wrapped command's flag, not wakivo's.
     options, command = split_command(["-d", "--", "ls", "-d"])
     assert options == ["-d"]
     assert command == ["ls", "-d"]
@@ -93,7 +93,7 @@ def test_end_to_end_propagates_the_command_exit_code() -> None:
 
 
 def test_end_to_end_reports_a_missing_command_as_127() -> None:
-    assert main(["-q", "--", "oncafe-no-such-binary"]) == 127
+    assert main(["-q", "--", "wakivo-no-such-binary"]) == 127
 
 
 def test_end_to_end_rejects_a_bad_duration_as_2() -> None:

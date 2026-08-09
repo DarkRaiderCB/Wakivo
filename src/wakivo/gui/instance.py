@@ -27,7 +27,7 @@ def lock_path() -> Path:
         root = Path.home() / "Library" / "Application Support"
     else:
         root = Path(os.environ.get("XDG_RUNTIME_DIR") or Path.home())
-    return root / "oncafe" / "gui.lock"
+    return root / "wakivo" / "gui.lock"
 
 
 def acquire(path: Path | None = None) -> bool:

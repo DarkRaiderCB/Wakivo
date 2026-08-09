@@ -5,9 +5,9 @@ import time
 
 import pytest
 
-from oncafe.backends import Wants
-from oncafe.session import HoldController
-from oncafe.triggers import IndefiniteTrigger, TimerTrigger
+from wakivo.backends import Wants
+from wakivo.session import HoldController
+from wakivo.triggers import IndefiniteTrigger, TimerTrigger
 
 
 class FakeBackend:

@@ -4,13 +4,13 @@ import argparse
 import sys
 
 SUPPORTED_PLATFORMS = ("darwin", "win32")
-INSTALL_HINT = 'the GUI needs its extra: pipx install "oncafe[gui]"'
-LINUX_HINT = "oncafe-gui runs on macOS and Windows only — use the `oncafe` CLI"
+INSTALL_HINT = 'the GUI needs its extra: pipx install "wakivo[gui]"'
+LINUX_HINT = "wakivo-gui runs on macOS and Windows only — use the `wakivo` CLI"
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="oncafe-gui",
+        prog="wakivo-gui",
         description="Keep this computer awake, from the menu bar.",
     )
     parser.add_argument(
@@ -43,13 +43,13 @@ def main(argv: list[str] | None = None) -> int:
     if not acquire():
         # Not an error: the app is already there, doing its job. A second icon
         # with its own separate hold would be the failure.
-        print("oncafe: already running — look for the cup in the menu bar")
+        print("wakivo: already running — look for the cup in the menu bar")
         return 0
 
     try:
         from .app import main as run
     except ImportError:
-        print(f"oncafe: {INSTALL_HINT}", file=sys.stderr)
+        print(f"wakivo: {INSTALL_HINT}", file=sys.stderr)
         return 2
 
     return run()
@@ -59,7 +59,7 @@ def _manage(args: argparse.Namespace) -> int:
     try:
         from .launcher import LauncherError, install, uninstall
     except ImportError:
-        print(f"oncafe: {INSTALL_HINT}", file=sys.stderr)
+        print(f"wakivo: {INSTALL_HINT}", file=sys.stderr)
         return 2
 
     try:
@@ -74,7 +74,7 @@ def _manage(args: argparse.Namespace) -> int:
         for path in install():
             print(f"created {path}")
     except (LauncherError, OSError) as error:
-        print(f"oncafe: {error}", file=sys.stderr)
+        print(f"wakivo: {error}", file=sys.stderr)
         return 1
     return 0
 

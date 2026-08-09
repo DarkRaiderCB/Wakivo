@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from oncafe.triggers import format_duration, parse_duration
+from wakivo.triggers import format_duration, parse_duration
 
 
 @pytest.mark.parametrize(

@@ -50,7 +50,7 @@ class WindowsBackend:
         self._thread = threading.Thread(
             target=self._hold,
             args=(flags,),
-            name="oncafe-wakelock",
+            name="wakivo-wakelock",
             daemon=True,
         )
         self._thread.start()

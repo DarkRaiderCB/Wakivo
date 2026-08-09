@@ -8,15 +8,15 @@ over D-Bus, so taking it directly means implementing D-Bus fd passing.
 this backend drives it as a child process instead.
 
 That would normally give up the guarantee the other backends provide -- an
-orphaned child would hold the inhibitor open after oncafe was gone.
+orphaned child would hold the inhibitor open after wakivo was gone.
 PR_SET_PDEATHSIG closes it: the kernel kills the helper the moment this
-process dies, so the fd is dropped no matter how oncafe exits, SIGKILL
+process dies, so the fd is dropped no matter how wakivo exits, SIGKILL
 included.
 
 Two holds, not one
 ------------------
 A logind inhibitor alone is not enough under GNOME. Measured on Debian/GNOME:
-with oncafe holding `sleep:idle` in *block* mode -- enough that `systemctl
+with wakivo holding `sleep:idle` in *block* mode -- enough that `systemctl
 suspend` was refused outright -- gsd-power still suspended the machine 112
 seconds into the hold. GNOME runs its own idle policy and consults its own
 session inhibitors, which live on the session bus and are entirely separate
@@ -56,7 +56,7 @@ _STARTUP_GRACE_SECONDS = 0.5
 _LOGIND_WHAT_PREFERENCES = ("idle:sleep", "idle")
 
 # GNOME: "suspend" only, deliberately not "idle". GNOME's idle inhibitor also
-# suppresses screen blanking and locking, and screen-off is oncafe's default.
+# suppresses screen blanking and locking, and screen-off is wakivo's default.
 _GNOME_WHAT = "suspend"
 
 
@@ -83,7 +83,7 @@ class LinuxBackend:
         self._systemd_inhibit = shutil.which("systemd-inhibit")
         if self._systemd_inhibit is None:
             raise BackendError(
-                "systemd-inhibit not found -- oncafe needs systemd-logind on Linux"
+                "systemd-inhibit not found -- wakivo needs systemd-logind on Linux"
             )
         self._gnome_inhibit = shutil.which("gnome-session-inhibit")
         # Loaded before the fork: running the dynamic loader in the child
@@ -111,12 +111,12 @@ class LinuxBackend:
                 self._spawn(
                     # Space-separated, not --opt=value: gnome-session-inhibit
                     # parses argv with exact string comparisons rather than
-                    # GLib, so "--app-id=oncafe" matches no option and falls
+                    # GLib, so "--app-id=wakivo" matches no option and falls
                     # through to the COMMAND position, where it tries to
                     # execute it. systemd-inhibit does accept --what=.
                     [
                         self._gnome_inhibit,
-                        "--app-id", "oncafe",
+                        "--app-id", "wakivo",
                         "--reason", reason,
                         "--inhibit", _GNOME_WHAT,
                         "cat",
@@ -135,7 +135,7 @@ class LinuxBackend:
                     [
                         self._systemd_inhibit,
                         f"--what={what}",
-                        "--who=oncafe",
+                        "--who=wakivo",
                         f"--why={reason}",
                         "--mode=block",
                         # cat blocks until its stdin closes, so releasing a

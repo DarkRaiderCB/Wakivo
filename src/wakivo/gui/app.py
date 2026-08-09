@@ -1,7 +1,7 @@
 """A menu-bar / tray front end, for people who would rather not use a shell.
 
 Deliberately smaller than the CLI. Anyone who wants to bind a hold to a
-specific process already knows what a PID is and is served by `oncafe --pid`;
+specific process already knows what a PID is and is served by `wakivo --pid`;
 everyone else wants two things -- keep this awake for a while, or keep it
 awake until I say otherwise -- and a picker they do not have to understand.
 
@@ -37,7 +37,7 @@ OPEN_ENDED = "open-ended"
 
 
 class TrayApp:
-    def __init__(self, backend=None, name: str = "oncafe") -> None:
+    def __init__(self, backend=None, name: str = "wakivo") -> None:
         import pystray
 
         self._pystray = pystray
@@ -59,7 +59,7 @@ class TrayApp:
         self._icon = pystray.Icon(
             name,
             artwork.render(active=False),
-            "oncafe",
+            "wakivo",
             menu=self._build_menu(),
         )
 
@@ -263,7 +263,7 @@ class TrayApp:
         self._mark_template_image()
 
     def run(self) -> None:
-        threading.Thread(target=self._tick, name="oncafe-tick", daemon=True).start()
+        threading.Thread(target=self._tick, name="wakivo-tick", daemon=True).start()
         _use_accessory_activation_policy()
         _release_own_console()
         try:
@@ -281,7 +281,7 @@ def _release_own_console() -> None:
     allocated it -- the shortcut, the launcher shim, or the interpreter --
     hand it back.
 
-    Only when we are the sole process attached to it. Typing `oncafe-gui` in a
+    Only when we are the sole process attached to it. Typing `wakivo-gui` in a
     terminal shares that terminal with the shell, and detaching from it there
     would be rude and confusing.
     """
@@ -367,7 +367,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         TrayApp().run()
     except BackendError as error:
-        print(f"oncafe: {error}", file=sys.stderr)
+        print(f"wakivo: {error}", file=sys.stderr)
         return 1
     return 0
 

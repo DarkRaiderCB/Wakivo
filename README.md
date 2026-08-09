@@ -231,6 +231,11 @@ The backend tests take a real wakelock and assert the OS can see it, so they
 catch a broken `ctypes` signature before a user does. On macOS one of them
 `SIGKILL`s a child holding an assertion and checks the kernel reclaimed it.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) — particularly the crash-safety
+invariant, and how to verify a change to a platform backend.
+
 ## Licence
 
 Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).

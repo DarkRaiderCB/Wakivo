@@ -219,3 +219,24 @@ def test_toggling_the_display_keeps_the_mark(app) -> None:
     app._hold_for(2 * 60 * 60)()
     app._toggle_display()
     assert marks(app)["2 hours"]
+
+
+def test_the_app_icon_is_visually_centred() -> None:
+    # It is composited by ink bounds rather than canvas, because the glyph is
+    # not centred within its own: the handle reaches right and the saucer sits
+    # low. Invisible at 22px, obvious at the sizes a Dock or a README uses.
+    from wakivo.gui.icon import APP_GROUND, render_app
+
+    image = render_app(256)
+    ink = [
+        (x, y)
+        for y in range(256)
+        for x in range(256)
+        if image.getpixel((x, y))[:3] != APP_GROUND[:3]
+        and image.getpixel((x, y))[3] > 128
+    ]
+    xs, ys = [p[0] for p in ink], [p[1] for p in ink]
+    centre_x = (min(xs) + max(xs)) / 2
+    centre_y = (min(ys) + max(ys)) / 2
+    assert abs(centre_x - 128) <= 2, f"horizontally off centre: {centre_x}"
+    assert abs(centre_y - 128) <= 2, f"vertically off centre: {centre_y}"

@@ -71,5 +71,20 @@ def render_app(size: int = 512) -> Image.Image:
     # Outlined rather than filled: a launcher icon should not imply that a
     # hold is currently active.
     cup = render(active=False, ink=APP_INK, size=int(size * 0.72))
-    image.alpha_composite(cup, ((size - cup.width) // 2, (size - cup.height) // 2))
+
+    # Centre the ink, not the canvas. The glyph is not centred within its own
+    # bounds -- the handle reaches right, the saucer sits low -- so centring
+    # the bitmap leaves the cup visibly down and to the left. Invisible at
+    # 22px, obvious at 512.
+    bounds = cup.getbbox()
+    if bounds:
+        left, top, right, bottom = bounds
+        offset = (
+            (size - (right - left)) // 2 - left,
+            (size - (bottom - top)) // 2 - top,
+        )
+    else:
+        offset = ((size - cup.width) // 2, (size - cup.height) // 2)
+
+    image.alpha_composite(cup, offset)
     return image

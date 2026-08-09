@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/DarkRaiderCB/Wakivo/main/docs/wakivo.png" alt="" width="96">
+
 # wakivo
 
 [![CI](https://github.com/DarkRaiderCB/Wakivo/actions/workflows/ci.yml/badge.svg)](https://github.com/DarkRaiderCB/Wakivo/actions/workflows/ci.yml)

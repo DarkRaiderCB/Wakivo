@@ -1,10 +1,7 @@
 [project]
 name = "wakivo"
-# A pre-release for the first upload: pre-releases are not installed by
-# default, so the whole pipeline can be exercised for real without this
-# becoming what people get. PyPI versions are immutable.
-version = "0.1.0a1"
-description = "Keep your machine awake for as long as a task actually runs."
+version = "0.1.0"
+description = "Keep your machine awake while your work runs."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = []

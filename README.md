@@ -1,32 +1,32 @@
-# oncafe
+# wakivo
 
-[![CI](https://github.com/DarkRaiderCB/OnCafe/actions/workflows/ci.yml/badge.svg)](https://github.com/DarkRaiderCB/OnCafe/actions/workflows/ci.yml)
+[![CI](https://github.com/DarkRaiderCB/Wakivo/actions/workflows/ci.yml/badge.svg)](https://github.com/DarkRaiderCB/Wakivo/actions/workflows/ci.yml)
 
 Keep your machine awake for as long as a task actually runs — then let it sleep again.
 
 Built for the case where you start something long (an agentic coding session, a training run, a big build), walk away from your desk, and come back to find the machine went to sleep half way through.
 
 ```sh
-oncafe -- uv run train.py     # stay awake until the command exits
-oncafe --pid 41823            # stay awake until that process exits
-oncafe 2h                     # stay awake for two hours
-oncafe                        # stay awake until Ctrl-C
+wakivo -- uv run train.py     # stay awake until the command exits
+wakivo --pid 41823            # stay awake until that process exits
+wakivo 2h                     # stay awake for two hours
+wakivo                        # stay awake until Ctrl-C
 ```
 
-`oncafe` exits with the wrapped command's own exit code, so it drops into scripts and CI without changing their behaviour.
+`wakivo` exits with the wrapped command's own exit code, so it drops into scripts and CI without changing their behaviour.
 
 ## Install
 
 ```sh
-uv tool install oncafe            # the CLI
-uv tool install "oncafe[gui]"     # and the menu bar app
+uv tool install wakivo            # the CLI
+uv tool install "wakivo[gui]"     # and the menu bar app
 ```
 
 `pipx install` works the same way. Requires Python 3.13+.
 
 ## Menu bar app
 
-`oncafe-gui` puts a cup in the menu bar (macOS) or notification area
+`wakivo-gui` puts a cup in the menu bar (macOS) or notification area
 (Windows), for when you would rather not open a terminal.
 
 ```
@@ -41,18 +41,18 @@ Quit
 ```
 
 Two modes, on purpose. Binding a hold to a particular process means knowing
-which process, and anyone who does is already served by `oncafe --pid` — so
+which process, and anyone who does is already served by `wakivo --pid` — so
 the GUI has no picker to misunderstand. The icon is filled while a hold is
 active and outlined when it is not, so "is it on?" needs no click.
 
 ### Launching it without a terminal
 
 ```sh
-oncafe-gui --install       # then launch it like any other app
-oncafe-gui --uninstall
+wakivo-gui --install       # then launch it like any other app
+wakivo-gui --uninstall
 ```
 
-On macOS this writes `~/Applications/OnCafe.app`; on Windows, a Start menu
+On macOS this writes `~/Applications/Wakivo.app`; on Windows, a Start menu
 shortcut. Run it once and you never need a shell again.
 
 No code signing is involved, because the launcher is built **on your machine**
@@ -64,7 +64,7 @@ have.
 
 **macOS and Windows only.** Linux keeps the CLI: GNOME removed system tray
 support years ago, so a tray icon needs a shell extension the user has to
-install first. `oncafe-gui` says so and exits rather than half-working.
+install first. `wakivo-gui` says so and exits rather than half-working.
 
 ## Options
 
@@ -78,7 +78,7 @@ Durations accept `90s`, `20m`, `2h`, `1h30m`, or a bare number of seconds.
 
 ## Scope
 
-oncafe prevents **idle sleep** — the machine suspending because you stopped
+wakivo prevents **idle sleep** — the machine suspending because you stopped
 touching it. That is the failure that interrupts a long task. Everything else
 is deliberately out of scope.
 
@@ -99,7 +99,7 @@ Two of those rows are worth explaining, because they surprise people:
 
 **Closing the lid still sleeps the machine.** The lid switch is a hardware
 event, separate from idle sleep, and no wakelock on any platform survives it —
-not `caffeinate`, not `SetThreadExecutionState`, not `oncafe`. Holding a laptop
+not `caffeinate`, not `SetThreadExecutionState`, not `wakivo`. Holding a laptop
 awake through a closed lid requires root and a *persistent* change to system
 power settings, so a crash could leave your machine permanently unable to
 sleep. That trade is deliberately not made here. It may return as an explicit
@@ -129,7 +129,7 @@ Any trigger composes with any backend, so a new release condition is a new file
 rather than a change to the wakelock code.
 
 Every backend must be crash-safe: the OS drops the hold when the process dies,
-including on `SIGKILL`. `oncafe` never mutates persistent system settings, so
+including on `SIGKILL`. `wakivo` never mutates persistent system settings, so
 there is nothing to clean up and nothing to restore.
 
 ### Why Linux drives a subprocess
@@ -142,7 +142,7 @@ logind is genuinely different. Its inhibitor is handed out as a *file
 descriptor* over D-Bus, so taking it in-process means implementing D-Bus fd
 passing. `systemd-inhibit` is the canonical client for that, so the Linux
 backend runs it as a child and uses `PR_SET_PDEATHSIG` to keep the guarantee:
-the kernel kills the helper the moment `oncafe` dies, so the descriptor is
+the kernel kills the helper the moment `wakivo` dies, so the descriptor is
 dropped however we exit. Taking the fd directly would remove the child
 entirely and is worth doing later.
 
@@ -159,14 +159,14 @@ A logind inhibitor alone does not stop GNOME. Measured on Debian/GNOME with a
 18:59:31  HOLD END
 ```
 
-oncafe was holding `sleep:idle` in **block** mode throughout — strong enough
+wakivo was holding `sleep:idle` in **block** mode throughout — strong enough
 that `systemctl suspend` was refused outright — and `gsd-power` suspended the
 machine anyway. GNOME runs its own idle policy against its own session
 inhibitors, which live on the session bus and are entirely separate from
 logind's. Adding `gnome-session-inhibit` fixed it: the same run now reaches
 `HOLD END` with no suspend in between.
 
-So inside a GNOME session oncafe takes both: the logind inhibitor, which
+So inside a GNOME session wakivo takes both: the logind inhibitor, which
 governs headless and non-GNOME systems, and `gnome-session-inhibit`, which is
 the one GNOME actually consults. Neither subsumes the other — a Debian server
 has no `gnome-session` at all.
@@ -180,12 +180,12 @@ outright. Blocking `idle` is granted broadly and covers logind's own
 `IdleAction`, which is exactly what governs those machines.
 
 Where the stronger hold is permitted, a deliberate `systemctl suspend` is
-refused while oncafe runs. That differs from macOS, where
+refused while wakivo runs. That differs from macOS, where
 `PreventUserIdleSystemSleep` leaves intentional sleep alone.
 
 The GNOME hold inhibits `suspend` only, deliberately not `idle` — GNOME's idle
 inhibitor also suppresses screen blanking and locking, and screen-off is
-oncafe's default.
+wakivo's default.
 
 ## Status
 

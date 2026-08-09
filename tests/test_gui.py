@@ -4,8 +4,8 @@ import sys
 
 import pytest
 
-from oncafe import gui
-from oncafe.backends import BackendError, Wants
+from wakivo import gui
+from wakivo.backends import BackendError, Wants
 
 from .test_session import FakeBackend, wait_until
 
@@ -17,16 +17,16 @@ if sys.platform not in gui.SUPPORTED_PLATFORMS:
 
 pystray = pytest.importorskip("pystray", reason="the GUI extra is not installed")
 
-from oncafe.gui import icon  # noqa: E402  -- needs the extra imported above
-from oncafe.gui.app import DURATIONS  # noqa: E402
+from wakivo.gui import icon  # noqa: E402  -- needs the extra imported above
+from wakivo.gui.app import DURATIONS  # noqa: E402
 
 @pytest.fixture
 def app(request):
-    from oncafe.gui.app import TrayApp
+    from wakivo.gui.app import TrayApp
 
     # A distinct name per test: see the note in TrayApp.__init__ about window
     # class collisions on Windows.
-    tray = TrayApp(backend=FakeBackend(), name=f"oncafe-{request.node.name}")
+    tray = TrayApp(backend=FakeBackend(), name=f"wakivo-{request.node.name}")
     yield tray
     tray._controller.stop()
 
@@ -55,8 +55,8 @@ def test_the_two_icon_states_are_distinguishable() -> None:
 
 
 def test_macos_draws_black_and_lets_the_system_recolour_it() -> None:
-    from oncafe.gui.app import _ink
-    from oncafe.gui.icon import BLACK, WHITE
+    from wakivo.gui.app import _ink
+    from wakivo.gui.icon import BLACK, WHITE
 
     if sys.platform == "darwin":
         assert _ink() == BLACK

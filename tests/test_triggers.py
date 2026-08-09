@@ -7,8 +7,8 @@ import threading
 
 import pytest
 
-from oncafe.triggers import CommandTrigger, PidTrigger, TriggerError
-from oncafe.triggers.pid import is_alive
+from wakivo.triggers import CommandTrigger, PidTrigger, TriggerError
+from wakivo.triggers.pid import is_alive
 
 
 def test_command_trigger_returns_the_child_exit_code() -> None:
@@ -16,7 +16,7 @@ def test_command_trigger_returns_the_child_exit_code() -> None:
 
 
 def test_command_trigger_reports_a_missing_binary_as_127() -> None:
-    trigger = CommandTrigger(["oncafe-no-such-binary"])
+    trigger = CommandTrigger(["wakivo-no-such-binary"])
     with pytest.raises(TriggerError) as caught:
         trigger.wait()
     assert caught.value.exit_code == 127
@@ -55,7 +55,7 @@ def test_pid_trigger_rejects_a_process_that_is_already_gone() -> None:
 
 
 def test_pid_trigger_releases_when_the_target_exits() -> None:
-    # The target is reaped on another thread, because a pid oncafe waits on is
+    # The target is reaped on another thread, because a pid wakivo waits on is
     # never its own child in practice -- and on POSIX an unreaped zombie still
     # answers signal 0, so it would read as alive forever.
     process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(1)"])

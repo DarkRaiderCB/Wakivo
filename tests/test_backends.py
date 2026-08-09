@@ -9,9 +9,9 @@ import time
 
 import pytest
 
-from oncafe.backends import BackendError, Wants, get_backend
+from wakivo.backends import BackendError, Wants, get_backend
 
-REASON = "oncafe: test"
+REASON = "wakivo: test"
 
 
 def macos_assertions() -> str:
@@ -73,7 +73,7 @@ def holder_source(marker: str) -> str:
     return (
         "import sys, time;"
         "sys.path.insert(0, 'src');"
-        "from oncafe.backends import get_backend, Wants;"
+        "from wakivo.backends import get_backend, Wants;"
         "b = get_backend();"
         f"b.acquire(Wants(), {marker!r});"
         "print('held', flush=True);"
@@ -135,7 +135,7 @@ def test_macos_hold_does_not_survive_the_process() -> None:
     # The whole design rests on the OS reclaiming the hold, so that a crash
     # cannot strand the machine awake. Verify with SIGKILL, which gives the
     # child no chance to clean up after itself.
-    marker = f"oncafe: kill test {os.getpid()}"
+    marker = f"wakivo: kill test {os.getpid()}"
     child = subprocess.Popen(
         [sys.executable, "-c", holder_source(marker)],
         stdout=subprocess.PIPE,
@@ -220,7 +220,7 @@ def test_linux_hold_is_visible_to_logind() -> None:
 def test_linux_takes_a_gnome_hold_only_inside_a_gnome_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from oncafe.backends.linux import _in_gnome_session
+    from wakivo.backends.linux import _in_gnome_session
 
     monkeypatch.delenv("XDG_CURRENT_DESKTOP", raising=False)
     monkeypatch.delenv("DBUS_SESSION_BUS_ADDRESS", raising=False)
@@ -253,7 +253,7 @@ def test_linux_hold_does_not_survive_the_process() -> None:
     # The inhibitor is held by a systemd-inhibit child, so this checks the
     # PR_SET_PDEATHSIG wiring: SIGKILL here must take the helper with it,
     # rather than orphaning it still holding the lock.
-    marker = f"oncafe: kill test {os.getpid()}"
+    marker = f"wakivo: kill test {os.getpid()}"
     child = subprocess.Popen(
         [sys.executable, "-c", holder_source(marker)],
         stdout=subprocess.PIPE,

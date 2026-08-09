@@ -23,14 +23,14 @@ LID_NOTE = "closing the lid will still sleep this machine"
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="oncafe",
+        prog="wakivo",
         description="Keep this machine awake for as long as a task actually runs.",
         epilog=(
             "examples:\n"
-            "  oncafe -- uv run train.py     hold until the command exits\n"
-            "  oncafe --pid 41823            hold until that process exits\n"
-            "  oncafe 2h                     hold for two hours\n"
-            "  oncafe                        hold until Ctrl-C\n"
+            "  wakivo -- uv run train.py     hold until the command exits\n"
+            "  wakivo --pid 41823            hold until that process exits\n"
+            "  wakivo 2h                     hold for two hours\n"
+            "  wakivo                        hold until Ctrl-C\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -57,12 +57,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="suppress status output",
     )
-    parser.add_argument("--version", action="version", version=f"oncafe {__version__}")
+    parser.add_argument("--version", action="version", version=f"wakivo {__version__}")
     return parser
 
 
 def split_command(argv: list[str]) -> tuple[list[str], list[str]]:
-    """Split `oncafe [options] -- cmd ...` at the first bare `--`."""
+    """Split `wakivo [options] -- cmd ...` at the first bare `--`."""
     if "--" not in argv:
         return argv, []
     index = argv.index("--")
@@ -103,10 +103,10 @@ def main(argv: list[str] | None = None) -> int:
         trigger = choose_trigger(args, command)
         backend = get_backend()
     except TriggerError as error:
-        print(f"oncafe: {error}", file=sys.stderr)
+        print(f"wakivo: {error}", file=sys.stderr)
         return error.exit_code
     except BackendError as error:
-        print(f"oncafe: {error}", file=sys.stderr)
+        print(f"wakivo: {error}", file=sys.stderr)
         return 2
 
     wants = Wants(system=True, display=args.keep_display)
@@ -118,13 +118,13 @@ def main(argv: list[str] | None = None) -> int:
     previous_term = signal.signal(signal.SIGTERM, on_terminate)
 
     try:
-        backend.acquire(wants, f"oncafe: {trigger.description}")
+        backend.acquire(wants, f"wakivo: {trigger.description}")
     except BackendError as error:
-        print(f"oncafe: {error}", file=sys.stderr)
+        print(f"wakivo: {error}", file=sys.stderr)
         return 1
 
     if not args.quiet:
-        print(f"oncafe: holding off {held}, {trigger.description}", file=sys.stderr)
+        print(f"wakivo: holding off {held}, {trigger.description}", file=sys.stderr)
         print(f"        note: {LID_NOTE}.", file=sys.stderr)
 
     started = time.monotonic()
@@ -134,14 +134,14 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         code = 130
     except TriggerError as error:
-        print(f"oncafe: {error}", file=sys.stderr)
+        print(f"wakivo: {error}", file=sys.stderr)
         code = error.exit_code
     finally:
         backend.release()
         signal.signal(signal.SIGTERM, previous_term)
         if not args.quiet:
             elapsed = format_duration(time.monotonic() - started)
-            print(f"\noncafe: released after {elapsed}", file=sys.stderr)
+            print(f"\nwakivo: released after {elapsed}", file=sys.stderr)
 
     return code
 

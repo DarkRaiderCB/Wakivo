@@ -13,8 +13,8 @@ import sys
 
 import pytest
 
-from oncafe import gui
-from oncafe.backends import BackendError
+from wakivo import gui
+from wakivo.backends import BackendError
 
 from .test_session import FakeBackend
 
@@ -49,11 +49,11 @@ class CountingIcon:
 
 @pytest.fixture
 def app(request):
-    from oncafe.gui.app import TrayApp
+    from wakivo.gui.app import TrayApp
 
     # A distinct name per test: see the note in TrayApp.__init__ about window
     # class collisions on Windows.
-    tray = TrayApp(backend=FakeBackend(), name=f"oncafe-{request.node.name}")
+    tray = TrayApp(backend=FakeBackend(), name=f"wakivo-{request.node.name}")
     tray._icon = CountingIcon()
     yield tray
     tray._controller.stop()

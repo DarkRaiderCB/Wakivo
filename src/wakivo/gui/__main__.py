@@ -1,4 +1,4 @@
-"""Lets the launcher start the app as `python -m oncafe.gui`.
+"""Lets the launcher start the app as `python -m wakivo.gui`.
 
 Generated launchers point at the interpreter rather than at a console script,
 because that path is stable wherever the tool was installed and does not

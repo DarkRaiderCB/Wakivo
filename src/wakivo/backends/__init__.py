@@ -23,5 +23,5 @@ def get_backend() -> Backend:
         return LinuxBackend()
     raise BackendError(
         f"no wakelock backend for {sys.platform!r} yet "
-        "-- oncafe supports macOS, Windows and Linux"
+        "-- wakivo supports macOS, Windows and Linux"
     )

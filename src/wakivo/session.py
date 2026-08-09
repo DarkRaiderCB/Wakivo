@@ -51,7 +51,7 @@ class HoldController:
         wants = wants if wants is not None else Wants()
 
         with self._lock:
-            self._backend.acquire(wants, f"oncafe: {trigger.description}")
+            self._backend.acquire(wants, f"wakivo: {trigger.description}")
             self._trigger = trigger
             self._wants = wants
             # Timer triggers know how long they run; nothing else does, and a
@@ -61,7 +61,7 @@ class HoldController:
             self._thread = threading.Thread(
                 target=self._wait_then_release,
                 args=(trigger,),
-                name="oncafe-hold",
+                name="wakivo-hold",
                 daemon=True,
             )
             self._thread.start()

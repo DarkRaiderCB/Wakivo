@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from oncafe import gui
+from wakivo import gui
 
 pytest.importorskip("PIL", reason="the GUI extra is not installed")
 
@@ -30,16 +30,16 @@ macos_only = pytest.mark.skipif(sys.platform != "darwin", reason="macOS bundle")
 
 @macos_only
 def test_install_builds_a_launchable_bundle(home) -> None:
-    from oncafe.gui.launcher import install
+    from wakivo.gui.launcher import install
 
     (app,) = install()
     contents = app / "Contents"
 
-    assert app == home / "Applications" / "OnCafe.app"
+    assert app == home / "Applications" / "Wakivo.app"
     assert (contents / "Info.plist").is_file()
-    assert (contents / "Resources" / "OnCafe.icns").is_file()
+    assert (contents / "Resources" / "Wakivo.icns").is_file()
 
-    stub = contents / "MacOS" / "OnCafe"
+    stub = contents / "MacOS" / "Wakivo"
     assert stub.is_file()
     # Executable, or double-clicking it does nothing at all.
     assert stub.stat().st_mode & 0o111
@@ -47,7 +47,7 @@ def test_install_builds_a_launchable_bundle(home) -> None:
 
 @macos_only
 def test_the_bundle_stays_out_of_the_dock(home) -> None:
-    from oncafe.gui.launcher import BUNDLE_ID, install
+    from wakivo.gui.launcher import BUNDLE_ID, install
 
     (app,) = install()
     plist = plistlib.loads((app / "Contents" / "Info.plist").read_bytes())
@@ -55,8 +55,8 @@ def test_the_bundle_stays_out_of_the_dock(home) -> None:
     # A menu bar app with a Dock icon and a ⌘-Tab entry is wrong.
     assert plist["LSUIElement"] is True
     assert plist["CFBundleIdentifier"] == BUNDLE_ID
-    assert plist["CFBundleExecutable"] == "OnCafe"
-    assert plist["CFBundleIconFile"] == "OnCafe"
+    assert plist["CFBundleExecutable"] == "Wakivo"
+    assert plist["CFBundleIconFile"] == "Wakivo"
 
 
 def boot_module(app: Path) -> Path:
@@ -72,10 +72,10 @@ def test_the_bundle_executable_is_a_real_copy_of_the_interpreter(home) -> None:
     #     item: created, never granted a slot, zero height, never appears
     #   - a symlink is rejected by codesign, which wants a regular file
     #   - so it has to be a copy
-    from oncafe.gui.launcher import install
+    from wakivo.gui.launcher import install
 
     (app,) = install()
-    executable = app / "Contents" / "MacOS" / "OnCafe"
+    executable = app / "Contents" / "MacOS" / "Wakivo"
 
     assert executable.is_file()
     assert not executable.is_symlink()
@@ -85,10 +85,10 @@ def test_the_bundle_executable_is_a_real_copy_of_the_interpreter(home) -> None:
 @macos_only
 def test_the_bundle_is_a_virtualenv_so_the_boot_module_is_found(home) -> None:
     # LaunchServices runs the executable with no arguments, so there is no
-    # `-m oncafe.gui` to hand it. Reaching it through LSEnvironment was tried
+    # `-m wakivo.gui` to hand it. Reaching it through LSEnvironment was tried
     # and does not work on current macOS at all, so the bundle is instead built
     # as a virtualenv and sitecustomize does the work.
-    from oncafe.gui.launcher import install
+    from wakivo.gui.launcher import install
 
     (app,) = install()
 
@@ -97,7 +97,7 @@ def test_the_bundle_is_a_virtualenv_so_the_boot_module_is_found(home) -> None:
     assert "home = " in config.read_text()
 
     source = boot_module(app).read_text()
-    assert "from oncafe.gui import main" in source
+    assert "from wakivo.gui import main" in source
 
     # No environment reliance left over.
     plist = plistlib.loads((app / "Contents" / "Info.plist").read_bytes())
@@ -107,7 +107,7 @@ def test_the_bundle_is_a_virtualenv_so_the_boot_module_is_found(home) -> None:
 @macos_only
 def test_the_interpreter_can_find_its_library_inside_the_bundle(home) -> None:
     # The copied binary loads its library through @executable_path/../lib.
-    from oncafe.gui.launcher import install
+    from wakivo.gui.launcher import install
 
     (app,) = install()
     dylibs = list((app / "Contents" / "lib").glob("*.dylib"))
@@ -118,37 +118,37 @@ def test_the_interpreter_can_find_its_library_inside_the_bundle(home) -> None:
 def test_the_boot_module_records_where_to_import_from(home) -> None:
     # The bundled interpreter is a copy of the *base* install, so it comes up
     # without the virtualenv's site-packages and has to be told where they are.
-    from oncafe.gui.launcher import install
+    from wakivo.gui.launcher import install
 
     (app,) = install()
     source = boot_module(app).read_text()
 
-    import oncafe
+    import wakivo
 
-    assert repr(str(Path(oncafe.__file__).resolve().parent.parent)) in source
+    assert repr(str(Path(wakivo.__file__).resolve().parent.parent)) in source
 
 
 @macos_only
 def test_uninstall_removes_everything_it_made(home) -> None:
-    from oncafe.gui.launcher import install, uninstall
+    from wakivo.gui.launcher import install, uninstall
 
     install()
     removed = uninstall()
 
     assert removed
-    assert not (home / "Applications" / "OnCafe.app").exists()
+    assert not (home / "Applications" / "Wakivo.app").exists()
     # And it is idempotent, so a second run is not an error.
     assert uninstall() == []
 
 
 def test_uninstall_is_quiet_when_nothing_is_installed(home) -> None:
-    from oncafe.gui.launcher import uninstall
+    from wakivo.gui.launcher import uninstall
 
     assert uninstall() == []
 
 
 def test_the_app_icon_has_its_own_ground() -> None:
-    from oncafe.gui.icon import APP_GROUND, render_app
+    from wakivo.gui.icon import APP_GROUND, render_app
 
     image = render_app(128)
     # Unlike the menu bar icon, this one sits on the user's wallpaper, so it
@@ -169,7 +169,7 @@ def write_pe(path: Path, subsystem: int) -> None:
 
 
 def test_a_console_shim_is_not_treated_as_windowless(tmp_path) -> None:
-    from oncafe.gui.launcher import _is_windowless
+    from wakivo.gui.launcher import _is_windowless
 
     gui, console, junk = (tmp_path / n for n in ("g.exe", "c.exe", "j.exe"))
     write_pe(gui, 2)
@@ -183,11 +183,11 @@ def test_a_console_shim_is_not_treated_as_windowless(tmp_path) -> None:
 
 
 def test_windows_target_avoids_the_uv_trampolines(tmp_path, monkeypatch) -> None:
-    # Under uv both the virtualenv's pythonw.exe and the oncafe-gui shim are
+    # Under uv both the virtualenv's pythonw.exe and the wakivo-gui shim are
     # trampolines: GUI-subsystem themselves, so they look correct, but they
     # spawn the base console python.exe and Windows gives that a terminal that
     # sits behind the tray icon for as long as the app runs.
-    from oncafe.gui import launcher
+    from wakivo.gui import launcher
 
     base, venv = tmp_path / "base", tmp_path / "venv"
     base.mkdir()
@@ -199,12 +199,12 @@ def test_windows_target_avoids_the_uv_trampolines(tmp_path, monkeypatch) -> None
 
     # A trampoline beside the executable is passed over ...
     write_pe(venv / "pythonw.exe", 2)
-    write_pe(venv / "oncafe-gui.exe", 2)
+    write_pe(venv / "wakivo-gui.exe", 2)
     write_pe(base / "pythonw.exe", 2)
 
     target, arguments = launcher._windows_target()
     assert target == str(base / "pythonw.exe")
-    assert "oncafe-gui.exe" not in target
+    assert "wakivo-gui.exe" not in target
     # ... and the packages travel as a script argument, because a shortcut
     # cannot set PYTHONPATH.
     assert arguments.strip('"').endswith("launch.pyw")
@@ -213,20 +213,20 @@ def test_windows_target_avoids_the_uv_trampolines(tmp_path, monkeypatch) -> None
 def test_the_windows_launcher_script_restores_the_import_paths(tmp_path, monkeypatch) -> None:
     # The shortcut runs the base interpreter, which has none of the
     # virtualenv's packages on its path.
-    from oncafe.gui import launcher
+    from wakivo.gui import launcher
 
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     monkeypatch.setattr(sys, "base_prefix", str(tmp_path))
     monkeypatch.setattr(sys, "base_exec_prefix", str(tmp_path))
     launcher._windows_target()
 
-    import oncafe
+    import wakivo
 
     source = launcher._windows_launcher_path().read_text()
     # repr, because the paths are embedded with {roots!r} -- on Windows the
     # separators come out escaped and the raw path never appears.
-    assert repr(str(Path(oncafe.__file__).resolve().parent.parent)) in source
-    assert "from oncafe.gui import main" in source
+    assert repr(str(Path(wakivo.__file__).resolve().parent.parent)) in source
+    assert "from wakivo.gui import main" in source
 
 
 @pytest.mark.parametrize(
@@ -236,16 +236,16 @@ def test_the_windows_launcher_script_restores_the_import_paths(tmp_path, monkeyp
 def test_the_bundle_version_is_one_apple_accepts(version, expected) -> None:
     # CFBundleShortVersionString allows up to three dot-separated integers, so
     # a pre-release like 0.1.0a1 cannot go in verbatim.
-    from oncafe.gui.launcher import _apple_version
+    from wakivo.gui.launcher import _apple_version
 
     assert _apple_version(version) == expected
 
 
 def test_the_version_matches_what_was_installed() -> None:
     # It was hardcoded here once and drifted from pyproject on the first
-    # pre-release, so `oncafe --version` reported the wrong number.
+    # pre-release, so `wakivo --version` reported the wrong number.
     from importlib.metadata import version as installed
 
-    import oncafe
+    import wakivo
 
-    assert oncafe.__version__ == installed("oncafe")
+    assert wakivo.__version__ == installed("wakivo")

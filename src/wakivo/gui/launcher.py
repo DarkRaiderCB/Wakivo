@@ -7,7 +7,7 @@ the user's own machine never carries that attribute, so Gatekeeper has nothing
 to object to and no certificate is involved.
 
 Nothing here embeds a Python runtime. The launcher points at the interpreter
-that is already installed and runs `python -m oncafe.gui`, which is stable
+that is already installed and runs `python -m wakivo.gui`, which is stable
 wherever the tool was installed and does not depend on PATH being set in
 whatever context the OS launches it from.
 """
@@ -25,8 +25,8 @@ from pathlib import Path
 from .. import __version__
 from . import icon as artwork
 
-APP_NAME = "OnCafe"
-BUNDLE_ID = "io.github.darkraidercb.oncafe"
+APP_NAME = "Wakivo"
+BUNDLE_ID = "io.github.darkraidercb.wakivo"
 
 ICO_SIZES = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
 
@@ -75,10 +75,10 @@ def _import_roots() -> list[str]:
     import PIL
     import pystray
 
-    import oncafe
+    import wakivo
 
     roots = []
-    for module in (oncafe, pystray, PIL):
+    for module in (wakivo, pystray, PIL):
         root = str(Path(module.__file__).resolve().parent.parent)
         if root not in roots:
             roots.append(root)
@@ -86,10 +86,10 @@ def _import_roots() -> list[str]:
 
 
 _BOOT_SOURCE = '''\
-"""Started by the OnCafe launcher.
+"""Started by the Wakivo launcher.
 
 LaunchServices runs a bundle's executable with no arguments, so there is no
-`-m oncafe.gui` to hand it. The bundle is therefore built as a virtualenv --
+`-m wakivo.gui` to hand it. The bundle is therefore built as a virtualenv --
 pyvenv.cfg beside the executable -- which puts this file on the path of that
 interpreter and nothing else. Python imports sitecustomize during startup, and
 that is the hook, reached before control would otherwise fall through to an
@@ -107,7 +107,7 @@ for _root in {roots!r}:
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
-from oncafe.gui import main
+from wakivo.gui import main
 
 _code = main()
 # _exit rather than sys.exit: site.py runs this during startup, where a
@@ -227,7 +227,7 @@ def _check_bundled_interpreter(executable: Path) -> None:
     if result.returncode != 0:
         raise LauncherError(
             "the bundled copy of Python will not run, so this interpreter's "
-            "layout is not supported for --install; the oncafe and oncafe-gui "
+            "layout is not supported for --install; the wakivo and wakivo-gui "
             f"commands still work. Details: {result.stderr.strip()}"
         )
 
@@ -267,7 +267,7 @@ def _shortcut_path() -> Path:
 
 def _ico_path() -> Path:
     root = os.environ.get("LOCALAPPDATA") or str(Path.home())
-    return Path(root) / "oncafe" / f"{APP_NAME}.ico"
+    return Path(root) / "wakivo" / f"{APP_NAME}.ico"
 
 
 def _install_windows() -> list[Path]:
@@ -283,7 +283,7 @@ def _install_windows() -> list[Path]:
 
 
 _WINDOWS_LAUNCH_SOURCE = '''\
-"""Started by the OnCafe shortcut.
+"""Started by the Wakivo shortcut.
 
 The shortcut runs the *base* interpreter's pythonw, not the virtualenv's, so
 this puts the virtualenv's packages back on the path. See _windows_target for
@@ -296,7 +296,7 @@ for _root in {roots!r}:
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
-from oncafe.gui import main
+from wakivo.gui import main
 
 sys.exit(main())
 '''
@@ -309,7 +309,7 @@ def _windows_launcher_path() -> Path:
 def _windows_target() -> tuple[str, str]:
     """Pick an interpreter that will not put a console behind the tray icon.
 
-    Not the virtualenv's pythonw.exe, and not the oncafe-gui shim. Under uv
+    Not the virtualenv's pythonw.exe, and not the wakivo-gui shim. Under uv
     both are trampolines: GUI-subsystem themselves, so they look right, but
     they spawn the base *python.exe*, which is console-subsystem, and Windows
     gives that a terminal. It stays for as long as the app runs.

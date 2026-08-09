@@ -234,12 +234,3 @@ catch a broken `ctypes` signature before a user does. On macOS one of them
 ## Licence
 
 Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
-
-Chosen over MIT for two things it adds. It grants patent rights explicitly, so
-anyone building on this is not relying on an implied licence. And anything
-redistributing a substantial portion has to carry the contents of `NOTICE`
-forward, which is a real attribution requirement rather than a copyright line
-that can sit unread in a bundled licence file.
-
-It stays permissive: you may use, modify, redistribute and sell this, and you
-are not obliged to publish your changes.

@@ -1,19 +1,28 @@
 name: Release
 
-# Tags only. Deliberately not runnable from a pull request: a PR can change
-# the workflow it runs under, so anything holding publish rights must never be
-# triggerable by one.
+# Tags only. Deliberately not runnable from a pull request: a PR can change the
+# workflow it runs under, so anything holding publish rights must never be
+# triggerable by one. Pushing a tag needs write access to the repository.
 on:
   push:
     tags: ["v*"]
+
+# Least privilege by default. The publish job re-grants exactly what it needs
+# and nothing else re-grants anything at all.
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Third-party actions are pinned to commit SHAs, not tags. A tag can be
+      # moved to point at different code; a commit cannot. These run inside a
+      # workflow that can publish, so a hijacked tag would be a way to reach
+      # the identity token below.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.13"
 
@@ -34,7 +43,7 @@ jobs:
       - name: Build
         run: uv build
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: dist
           path: dist/
@@ -42,17 +51,20 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    # Named so PyPI's trusted publisher can be scoped to it, and so the
-    # publish step can be given approval rules later without touching CI.
+    # Named so PyPI's trusted publisher can be scoped to it: without this, any
+    # workflow in the repository would satisfy the publisher record. It is also
+    # where a required-reviewer rule goes, if a deliberate pause before an
+    # irreversible upload is wanted.
     environment: pypi
     permissions:
       # The whole point of trusted publishing: GitHub mints a short-lived
       # identity token and PyPI verifies it. No API token is stored anywhere.
+      # Scoped to this job so the build cannot reach it.
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: dist
           path: dist/
 
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2

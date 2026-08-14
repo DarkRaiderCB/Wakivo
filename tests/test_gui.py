@@ -77,7 +77,7 @@ def test_status_text_tracks_the_hold(app) -> None:
     assert "Not holding" in app._status_text()
 
     app._hold_open_ended()
-    assert app._status_text() == "Awake — until you quit"
+    assert app._status_text() == "Awake, until you quit"
 
     app._stop()
     assert "Not holding" in app._status_text()
@@ -86,9 +86,9 @@ def test_status_text_tracks_the_hold(app) -> None:
 @pytest.mark.parametrize(
     ("seconds", "expected"),
     [
-        (2 * 60 * 60, "Awake — 2h left"),
-        (90 * 60, "Awake — 1h 30m left"),
-        (15 * 60, "Awake — 15m left"),
+        (2 * 60 * 60, "Awake, 2h left"),
+        (90 * 60, "Awake, 1h 30m left"),
+        (15 * 60, "Awake, 15m left"),
     ],
 )
 def test_a_duration_shows_a_countdown(app, seconds: int, expected: str) -> None:

@@ -32,7 +32,7 @@ uv tool install "wakivo[gui]"     # and the menu bar app
 (Windows), for when you would rather not open a terminal.
 
 ```
-● Awake — 1h 30m left
+● Awake, 1h 30m left
 ──────────────────────
 Keep awake for      ▸   15m · 30m · 1h · 2h · 4h
 Keep awake until I quit
@@ -43,7 +43,7 @@ Quit
 ```
 
 Two modes, on purpose. Binding a hold to a particular process means knowing
-which process, and anyone who does is already served by `wakivo --pid` — so
+which process, and anyone who does is already served by `wakivo --pid`, so
 the GUI has no picker to misunderstand. The icon is filled while a hold is
 active and outlined when it is not, so "is it on?" needs no click.
 
@@ -59,7 +59,7 @@ shortcut. Run it once and you never need a shell again.
 
 No code signing is involved, because the launcher is built **on your machine**
 rather than downloaded. Gatekeeper and SmartScreen act on the quarantine
-attribute, which is applied by whatever fetched a file from elsewhere — a
+attribute, which is applied by whatever fetched a file from elsewhere. A
 bundle your own computer just wrote never carries one. Nothing here embeds a
 Python runtime either; the launcher simply starts the interpreter you already
 have.
@@ -72,7 +72,7 @@ install first. `wakivo-gui` says so and exits rather than half-working.
 
 | Flag | Effect |
 | --- | --- |
-| `-d`, `--keep-display` | Also keep the display on. Off by default — the screen still sleeps. Not yet supported on Linux, where it is refused rather than silently ignored. |
+| `-d`, `--keep-display` | Also keep the display on. Off by default; the screen still sleeps. Not yet supported on Linux, where it is refused rather than silently ignored. |
 | `-q`, `--quiet` | Suppress status output. |
 | `--pid PID` | Release when this process exits. |
 
@@ -80,13 +80,13 @@ Durations accept `90s`, `20m`, `2h`, `1h30m`, or a bare number of seconds.
 
 ## Scope
 
-wakivo prevents **idle sleep** — the machine suspending because you stopped
+wakivo prevents **idle sleep**: the machine suspending because you stopped
 touching it. That is the failure that interrupts a long task. Everything else
 is deliberately out of scope.
 
 | Behaviour | Held off? |
 | --- | --- |
-| Idle system sleep / suspend | **Yes** — the entire point |
+| Idle system sleep / suspend | **Yes**, the entire point |
 | Screen blanking | No by default; `-d` on macOS and Windows |
 | Session lock / password prompt | No |
 | Closing the lid | **No** |
@@ -94,13 +94,13 @@ is deliberately out of scope.
 | Deliberate sleep (`systemctl suspend`, menu, ⌘⌥⏏) | Allowed on macOS and Windows; refused on Linux where the stronger hold is permitted |
 
 A blanked, locked screen with your job still running is the *intended*
-outcome, not a failure — it is why screen-off is the default rather than `-d`.
+outcome, not a failure. It is why screen-off is the default rather than `-d`.
 Neither blanking nor locking stops a running process.
 
 Two of those rows are worth explaining, because they surprise people:
 
 **Closing the lid still sleeps the machine.** The lid switch is a hardware
-event, separate from idle sleep, and no wakelock on any platform survives it —
+event, separate from idle sleep, and no wakelock on any platform survives it:
 not `caffeinate`, not `SetThreadExecutionState`, not `wakivo`. Holding a laptop
 awake through a closed lid requires root and a *persistent* change to system
 power settings, so a crash could leave your machine permanently unable to
@@ -116,14 +116,14 @@ battery, and shouldn't be able to.
 
 Two independent axes:
 
-- **`backends/`** — *how* the hold is taken, per platform. macOS uses IOKit
+- **`backends/`**: *how* the hold is taken, per platform. macOS uses IOKit
   power assertions via `ctypes`; Windows uses `SetThreadExecutionState` on a
   dedicated parked thread, because the flag is per-thread and evaporates when
   the setting thread exits; Linux takes a systemd-logind inhibitor, plus
   GNOME's own session inhibitor when running inside a GNOME session.
-- **`triggers/`** — *when* the hold is released: a command exiting, a pid dying,
+- **`triggers/`**: *when* the hold is released: a command exiting, a pid dying,
   a timer, or an interrupt.
-- **`session.py`** — a hold that can be started and stopped rather than waited
+- **`session.py`**: a hold that can be started and stopped rather than waited
   out. The CLI runs to completion; the menu bar app needs to acquire and
   return, then release later. Both drive the same backends and triggers.
 
@@ -137,7 +137,7 @@ there is nothing to clean up and nothing to restore.
 ### Why Linux drives a subprocess
 
 macOS and Windows call the platform API directly rather than shelling out to
-`caffeinate` — a child process is one more thing that can outlive us still
+`caffeinate`. A child process is one more thing that can outlive us still
 holding the hold.
 
 logind is genuinely different. Its inhibitor is handed out as a *file
@@ -161,8 +161,8 @@ A logind inhibitor alone does not stop GNOME. Measured on Debian/GNOME with a
 18:59:31  HOLD END
 ```
 
-wakivo was holding `sleep:idle` in **block** mode throughout — strong enough
-that `systemctl suspend` was refused outright — and `gsd-power` suspended the
+wakivo was holding `sleep:idle` in **block** mode throughout, strong enough
+that `systemctl suspend` was refused outright, and `gsd-power` suspended the
 machine anyway. GNOME runs its own idle policy against its own session
 inhibitors, which live on the session bus and are entirely separate from
 logind's. Adding `gnome-session-inhibit` fixed it: the same run now reaches
@@ -170,12 +170,12 @@ logind's. Adding `gnome-session-inhibit` fixed it: the same run now reaches
 
 So inside a GNOME session wakivo takes both: the logind inhibitor, which
 governs headless and non-GNOME systems, and `gnome-session-inhibit`, which is
-the one GNOME actually consults. Neither subsumes the other — a Debian server
+the one GNOME actually consults. Neither subsumes the other: a Debian server
 has no `gnome-session` at all.
 
 The logind hold tries `--what=idle:sleep` first and falls back to `idle`.
 Blocking `sleep` also stops `Suspend()` calls, covering desktops whose power
-daemon hasn't been measured here — but it needs the
+daemon hasn't been measured here, but it needs the
 `org.freedesktop.login1.inhibit-block-sleep` polkit action, which is denied
 without an active seat session, so headless servers and CI runners are refused
 outright. Blocking `idle` is granted broadly and covers logind's own
@@ -185,15 +185,15 @@ Where the stronger hold is permitted, a deliberate `systemctl suspend` is
 refused while wakivo runs. That differs from macOS, where
 `PreventUserIdleSystemSleep` leaves intentional sleep alone.
 
-The GNOME hold inhibits `suspend` only, deliberately not `idle` — GNOME's idle
+The GNOME hold inhibits `suspend` only, deliberately not `idle`: GNOME's idle
 inhibitor also suppresses screen blanking and locking, and screen-off is
 wakivo's default.
 
 ## Status
 
 macOS, Windows and Linux all pass in CI, each asserting against its own power
-tooling — `pmset -g assertions`, `powercfg /requests`, `systemd-inhibit
---list` — that the hold is visible to the OS and is reclaimed when the process
+tooling (`pmset -g assertions`, `powercfg /requests`, `systemd-inhibit
+--list`) that the hold is visible to the OS and is reclaimed when the process
 is killed outright.
 
 Beyond CI, all three have been verified on real hardware the only way that
@@ -214,7 +214,7 @@ Two honest limits on what CI itself proves:
   verifiable by hand.
 - Linux runs on `ubuntu-latest`, a headless systemd VM with no seat session.
   It covers the logind path and the fallback to an idle-only hold, but never
-  reaches the GNOME branch — which is exactly where the bug above lived.
+  reaches the GNOME branch, which is exactly where the bug above lived.
   Desktop coverage is manual.
 
 `--keep-display` is unimplemented on Linux; it needs the DE-specific
@@ -233,9 +233,9 @@ catch a broken `ctypes` signature before a user does. On macOS one of them
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) — particularly the crash-safety
+See [CONTRIBUTING.md](CONTRIBUTING.md), particularly the crash-safety
 invariant, and how to verify a change to a platform backend.
 
 ## Licence
 
-Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

@@ -5,7 +5,7 @@ import sys
 
 SUPPORTED_PLATFORMS = ("darwin", "win32")
 INSTALL_HINT = 'the GUI needs its extra: pipx install "wakivo[gui]"'
-LINUX_HINT = "wakivo-gui runs on macOS and Windows only — use the `wakivo` CLI"
+LINUX_HINT = "wakivo-gui runs on macOS and Windows only. Use the `wakivo` CLI"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -43,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     if not acquire():
         # Not an error: the app is already there, doing its job. A second icon
         # with its own separate hold would be the failure.
-        print("wakivo: already running — look for the cup in the menu bar")
+        print("wakivo: already running. Look for the cup in the menu bar")
         return 0
 
     try:

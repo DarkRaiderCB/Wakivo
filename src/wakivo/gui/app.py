@@ -115,10 +115,10 @@ class TrayApp:
             return self._error
         status = self._controller.status()
         if not status.active:
-            return "Not holding — this computer sleeps normally"
+            return "Not holding, this computer sleeps normally"
         if status.remaining is not None:
-            return f"Awake — {_humanize(status.remaining)} left"
-        return "Awake — until you quit"
+            return f"Awake, {_humanize(status.remaining)} left"
+        return "Awake, until you quit"
 
     def _is_active(self) -> bool:
         return self._controller.status().active

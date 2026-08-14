@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for looking. This file covers the things that are specific to wakivo —
+Thanks for looking. This file covers the things that are specific to wakivo:
 the invariants, and how to verify a change to a platform backend. For what
 wakivo does and does not do, read the Scope section of the [README](README.md)
 first; a lot of proposals turn out to be things that were left out on purpose.
@@ -18,8 +18,8 @@ pystray and Pillow behind the `gui` extra.
 ## The one invariant
 
 **The operating system must reclaim the hold when the process dies.** Every
-backend holds something the kernel owns — an IOKit assertion, a per-thread
-execution state, a logind inhibitor file descriptor — so that `SIGKILL`, a
+backend holds something the kernel owns (an IOKit assertion, a per-thread
+execution state, a logind inhibitor file descriptor) so that `SIGKILL`, a
 crash, or a closed terminal leaves nothing behind.
 
 This rules out the obvious shortcuts. `pmset disablesleep` and
@@ -37,12 +37,12 @@ helper when wakivo dies.
 
 Two independent axes, which is what keeps platform code and policy separate:
 
-- **`backends/`** — *how* a hold is taken, one module per platform
-- **`triggers/`** — *when* it is released: a command exits, a pid dies, a timer
+- **`backends/`**: *how* a hold is taken, one module per platform
+- **`triggers/`**: *when* it is released: a command exits, a pid dies, a timer
   runs out, an interrupt arrives
-- **`session.py`** — a hold that can be started and stopped rather than waited
+- **`session.py`**: a hold that can be started and stopped rather than waited
   out; the CLI runs to completion, the tray app does not
-- **`gui/`** — a front end only. It builds a `Trigger` and hands it to the
+- **`gui/`**: a front end only. It builds a `Trigger` and hands it to the
   controller. No power logic lives there.
 
 A new release condition should be a new file in `triggers/`, not a change to
@@ -66,7 +66,7 @@ before concluding a change is covered.
 
 ## Verifying a backend change
 
-CI cannot prove a machine stays awake — no runner ever idles into sleep. It
+CI cannot prove a machine stays awake, because no runner ever idles into sleep. It
 proves the platform accepts the hold and reports it. Anything that changes
 power behaviour has to be checked by hand on that platform, and the honest
 method needs a control:
@@ -81,7 +81,7 @@ Where to look for the hold itself:
 | Platform | Command |
 | --- | --- |
 | macOS | `pmset -g assertions`, and `pmset -g log` for sleep history |
-| Windows | `powercfg /requests` — needs an elevated shell |
+| Windows | `powercfg /requests`, needs an elevated shell |
 | Linux | `systemd-inhibit --list`, and `journalctl` for suspend events |
 
 Say in the pull request which platforms you verified on and how. "Tests pass"
@@ -92,7 +92,7 @@ is not the same claim.
 CI runs on Linux, Windows and macOS, and all three must pass before merge.
 Branch protection means everything reaches `main` through a pull request.
 
-Commit messages here explain *why*, not what — several record measurements
+Commit messages here explain *why*, not what. Several record measurements
 that took hours to obtain, such as a status item coming up zero pixels high,
 or a launcher spawning a console interpreter. If your change fixes something
 non-obvious, put the evidence in the message; the next person will need it,
@@ -110,6 +110,6 @@ Two things that will be pushed back on:
 
 Include your OS and version, `wakivo --version`, the exact command, and what
 the platform tool above reported while the hold was meant to be active. For
-"it went to sleep anyway", the journal or log excerpt is the useful part — the
+"it went to sleep anyway", the journal or log excerpt is the useful part. The
 lid, a critical battery, and a desktop environment with its own idle policy
 are all out of wakivo's reach, and the logs are what tell those apart.

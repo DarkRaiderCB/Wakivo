@@ -57,12 +57,11 @@ wakivo-gui --uninstall
 On macOS this writes `~/Applications/Wakivo.app`; on Windows, a Start menu
 shortcut. Run it once and you never need a shell again.
 
-No code signing is involved, because the launcher is built **on your machine**
-rather than downloaded. Gatekeeper and SmartScreen act on the quarantine
-attribute, which is applied by whatever fetched a file from elsewhere. A
-bundle your own computer just wrote never carries one. Nothing here embeds a
-Python runtime either; the launcher simply starts the interpreter you already
-have.
+On macOS, the copied Python executable gets a verified local ad-hoc signature
+with Wakivo's own identifier. It needs no Apple developer certificate. This
+signs the executable; it does not seal the whole bundle or notarize the app
+for distribution. The launcher uses your existing Python installation and
+packages.
 
 **macOS and Windows only.** Linux keeps the CLI: GNOME removed system tray
 support years ago, so a tray icon needs a shell extension the user has to

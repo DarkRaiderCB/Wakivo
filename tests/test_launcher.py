@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import plistlib
 import sys
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -80,6 +81,44 @@ def test_the_bundle_executable_is_a_real_copy_of_the_interpreter(home) -> None:
     assert executable.is_file()
     assert not executable.is_symlink()
     assert executable.stat().st_mode & 0o111
+
+
+@macos_only
+def test_launcher_has_wakivos_verified_executable_signature(home) -> None:
+    from wakivo.gui.launcher import BUNDLE_ID, install
+
+    (app,) = install()
+    signature = subprocess.run(
+        ["codesign", "-dvv", str(app)], capture_output=True, text=True, timeout=15
+    )
+    assert signature.returncode == 0
+    assert f"Identifier={BUNDLE_ID}" in signature.stderr
+    assert "Signature=adhoc" in signature.stderr
+    # This local launcher signs its executable, not the external Python packages.
+    verified = subprocess.run(
+        ["codesign", "--verify", "--strict", "--ignore-resources", str(app)],
+        capture_output=True, text=True, timeout=15,
+    )
+    assert verified.returncode == 0, verified.stderr
+
+
+@macos_only
+@pytest.mark.parametrize("failure_step", ["--force", "--verify"])
+def test_signing_failures_are_reported(tmp_path, monkeypatch, failure_step) -> None:
+    from wakivo.gui import launcher
+
+    interpreter, executable = tmp_path / "python", tmp_path / "Wakivo"
+    interpreter.write_bytes(b"interpreter")
+    executable.write_bytes(b"previous executable")
+
+    def fail(command, **kwargs):
+        failed = command[1] == failure_step
+        return subprocess.CompletedProcess(command, 1 if failed else 0, "", "signing refused")
+
+    monkeypatch.setattr(launcher.subprocess, "run", fail)
+    with pytest.raises(launcher.LauncherError, match="signing refused"):
+        launcher._copy_signed_interpreter(interpreter, executable)
+    assert executable.read_bytes() == b"previous executable"
 
 
 @macos_only

@@ -7,7 +7,8 @@ import pytest
 from wakivo import gui
 from wakivo.backends import BackendError, Wants
 
-from .test_session import FakeBackend, wait_until
+from .gui_helpers import CountingIcon, wait_until
+from .test_session import FakeBackend
 
 # Skipped before pystray is imported at all: on a headless Linux runner it
 # raises Xlib.error.DisplayNameError while selecting a backend, which
@@ -21,14 +22,14 @@ from wakivo.gui import icon  # noqa: E402  -- needs the extra imported above
 from wakivo.gui.app import DURATIONS  # noqa: E402
 
 @pytest.fixture
-def app(request):
+def app(request, monkeypatch):
     from wakivo.gui.app import TrayApp
 
-    # A distinct name per test: see the note in TrayApp.__init__ about window
-    # class collisions on Windows.
+    monkeypatch.setattr(pystray, "Icon", CountingIcon)
     tray = TrayApp(backend=FakeBackend(), name=f"wakivo-{request.node.name}")
     yield tray
     tray._controller.stop()
+    wait_until(lambda: True)
 
 
 def colours(image) -> list[tuple[int, tuple[int, int, int, int]]]:
@@ -62,6 +63,49 @@ def test_macos_draws_black_and_lets_the_system_recolour_it() -> None:
         assert _ink() == BLACK
     else:
         assert _ink() in (BLACK, WHITE)
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="native macOS symbols")
+def test_macos_uses_distinct_native_template_symbols() -> None:
+    from wakivo.gui.icon import render_macos
+
+    idle, active = render_macos(False), render_macos(True)
+    for image in (idle, active):
+        assert image is not None
+        assert any(rep.className() == "NSSymbolImageRep" for rep in image.representations())
+        assert image.isTemplate()
+        assert 0 < image.size().width <= 24
+        assert 0 < image.size().height <= 24
+    assert bytes(idle.TIFFRepresentation()) != bytes(active.TIFFRepresentation())
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="native macOS symbols")
+def test_native_image_reaches_the_status_button(app) -> None:
+    from types import SimpleNamespace
+
+    images = []
+    button = SimpleNamespace(setImage_=images.append)
+    app._icon._status_item = SimpleNamespace(button=lambda: button)
+    app._icon._icon_image = None
+    app._refresh()
+    assert any(rep.className() == "NSSymbolImageRep" for rep in images[-1].representations())
+    assert app._icon._icon_image is images[-1]
+    idle = bytes(images[-1].TIFFRepresentation())
+    app._hold_open_ended()
+    assert images[-1].isTemplate()
+    assert bytes(images[-1].TIFFRepresentation()) != idle
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS raster fallback")
+def test_missing_symbol_keeps_the_raster_template(app, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    templates = []
+    app._icon._status_item = SimpleNamespace()
+    app._icon._icon_image = SimpleNamespace(setTemplate_=templates.append)
+    monkeypatch.setattr(icon, "render_macos", lambda active: None)
+    app._mark_template_image()
+    assert templates == [True]
 
 
 def test_menu_offers_only_the_two_modes(app) -> None:

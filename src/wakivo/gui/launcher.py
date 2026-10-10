@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from .. import __version__
@@ -147,8 +148,7 @@ def _install_macos() -> list[Path]:
 
     interpreter = Path(sys.executable).resolve()
     executable = macos / APP_NAME
-    shutil.copy2(interpreter, executable)
-    executable.chmod(0o755)
+    _copy_signed_interpreter(interpreter, executable)
 
     # The interpreter loads its library through @executable_path/../lib, which
     # inside the bundle means Contents/lib.
@@ -195,7 +195,6 @@ def _install_macos() -> list[Path]:
     )
 
     _check_bundled_interpreter(executable)
-    _sign(app)
     return [app]
 
 
@@ -232,24 +231,32 @@ def _check_bundled_interpreter(executable: Path) -> None:
         )
 
 
-def _sign(app: Path) -> None:
-    """Ad-hoc sign, best effort.
+def _copy_signed_interpreter(interpreter: Path, executable: Path) -> None:
+    """Give the executable a local signature with Wakivo's own identity.
 
-    codesign objects to pyvenv.cfg living in Contents/MacOS, where it treats
-    every file as code -- and pyvenv.cfg has to live there, because Python does
-    not honour it anywhere else. The bundle launches regardless, so this is not
-    worth failing an install over. It is still attempted, because a signature
-    is what stops Gatekeeper complaining when one *can* be produced.
+    Sign outside the bundle: codesign otherwise tries to seal the whole
+    bundle and rejects pyvenv.cfg as unsigned code.
     """
-    try:
-        subprocess.run(
-            ["codesign", "--force", "--sign", "-", str(app)],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-    except (OSError, subprocess.SubprocessError):
-        pass
+    with tempfile.TemporaryDirectory(prefix="wakivo-sign-") as scratch:
+        staged = Path(scratch) / APP_NAME
+        shutil.copy2(interpreter, staged)
+        staged.chmod(0o755)
+        for command in (
+            ["codesign", "--force", "--sign", "-", "--identifier", BUNDLE_ID, str(staged)],
+            ["codesign", "--verify", "--strict", str(staged)],
+        ):
+            try:
+                result = subprocess.run(
+                    command, capture_output=True, text=True, timeout=30
+                )
+            except (OSError, subprocess.SubprocessError) as error:
+                raise LauncherError(f"could not sign or verify the interpreter: {error}") from error
+            if result.returncode != 0:
+                raise LauncherError(
+                    "could not sign or verify the interpreter: "
+                    f"{result.stderr.strip()}"
+                )
+        shutil.move(staged, executable)
 
 
 # -- Windows -----------------------------------------------------------------

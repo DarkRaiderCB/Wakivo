@@ -203,6 +203,8 @@ class TrayApp:
         about whether the controller already notified -- calling this twice
         costs nothing.
         """
+        if _defer_to_main_thread(self._refresh):
+            return
         if self._batching:
             return
 
@@ -237,19 +239,21 @@ class TrayApp:
                 self._refresh()
 
     def _mark_template_image(self) -> None:
-        """Ask macOS to recolour the icon for the menu bar it sits in.
+        """Replace pystray's low-resolution bitmap with a native template.
 
-        pystray builds a plain NSImage, so the icon would render exactly as
-        drawn -- black, and invisible on a dark menu bar. Marking that image as
-        a template makes the system use only its alpha and paint it black or
-        white to match, which is what every native menu bar item does.
-
-        This reaches for a pystray private attribute, so it is guarded: if the
-        internals move, the icon is merely drawn as-is rather than broken.
+        Private toolkit attributes are guarded so older macOS versions and
+        changed toolkit internals can still use the raster fallback.
         """
         if sys.platform != "darwin":
             return
         try:
+            status_item = getattr(self._icon, "_status_item", None)
+            if status_item is not None:
+                image = artwork.render_macos(active=self._is_active())
+                if image is not None:
+                    self._icon._icon_image = image
+                    status_item.button().setImage_(image)
+                    return
             image = getattr(self._icon, "_icon_image", None)
             if image is not None:
                 image.setTemplate_(True)
@@ -257,6 +261,8 @@ class TrayApp:
             pass
 
     def _on_ready(self, icon) -> None:
+        if _defer_to_main_thread(self._on_ready, icon):
+            return
         icon.visible = True
         # The NSImage does not exist until the icon is on screen, so this is
         # the first moment the template flag can be set.
@@ -271,6 +277,16 @@ class TrayApp:
         finally:
             self._stopping.set()
             self._controller.stop()
+
+
+def _defer_to_main_thread(callback, *args) -> bool:
+    if sys.platform != "darwin" or threading.current_thread() is threading.main_thread():
+        return False
+    from PyObjCTools.AppHelper import callAfter
+
+    # Never wait here: the main thread may be joining the session worker.
+    callAfter(callback, *args)
+    return True
 
 
 def _release_own_console() -> None:

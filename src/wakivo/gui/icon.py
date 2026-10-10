@@ -88,3 +88,19 @@ def render_app(size: int = 512) -> Image.Image:
 
     image.alpha_composite(cup, offset)
     return image
+
+
+def render_macos(active: bool):
+    """Use a native symbol so macOS retains its Retina representations."""
+    from AppKit import NSImage
+
+    make_symbol = getattr(
+        NSImage, "imageWithSystemSymbolName_accessibilityDescription_", None
+    )
+    if make_symbol is None:
+        return None
+    symbol = "cup.and.saucer.fill" if active else "cup.and.saucer"
+    image = make_symbol(symbol, "Wakivo")
+    if image is not None:
+        image.setTemplate_(True)
+    return image

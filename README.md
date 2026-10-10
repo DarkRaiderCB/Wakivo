@@ -20,8 +20,8 @@ wakivo                        # stay awake until Ctrl-C
 ## Install
 
 ```sh
-uv tool install wakivo            # the CLI
-uv tool install "wakivo[gui]"     # and the menu bar app
+uv tool install wakivo --python 3.13            # the CLI
+uv tool install "wakivo[gui]" --python 3.13     # and the menu bar app
 ```
 
 `pipx install` works the same way. Requires Python 3.13+.
